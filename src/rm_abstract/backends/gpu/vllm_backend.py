@@ -1,7 +1,7 @@
 """
-vLLM 기반 GPU 백엔드
+vLLM-based GPU Backend
 
-GPU에서 vLLM을 사용한 고성능 LLM 추론 지원
+High-performance LLM inference using vLLM on GPU
 """
 
 from typing import Any, Dict, Optional, List
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 class VLLMBackend(Backend):
     """
-    vLLM 기반 GPU 백엔드
+    vLLM-based GPU Backend
 
-    vLLM의 Continuous Batching, Tensor Parallel 등 고급 기능 활용
+    Utilizes vLLM's advanced features like Continuous Batching, Tensor Parallel, etc.
     """
 
     def __init__(self, device_id: int = 0, **kwargs):
@@ -33,29 +33,32 @@ class VLLMBackend(Backend):
         return "gpu"
 
     def is_available(self) -> bool:
-        """CUDA 및 vLLM 사용 가능 여부 확인"""
+        """Check CUDA and vLLM availability"""
         try:
             import torch
+
             if not torch.cuda.is_available():
                 return False
 
-            # vLLM 임포트 확인
+            # Check vLLM import
             import vllm
+
             return True
         except ImportError:
             return False
 
     def initialize(self) -> None:
-        """GPU 백엔드 초기화"""
+        """Initialize GPU backend"""
         if self._initialized:
             return
 
         try:
             import torch
+
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA not available")
 
-            # 지정된 GPU 설정
+            # Set specified GPU
             torch.cuda.set_device(self.device_id)
             self._initialized = True
             logger.info(f"GPU backend initialized on cuda:{self.device_id}")
@@ -66,18 +69,18 @@ class VLLMBackend(Backend):
 
     def prepare_model(self, model: Any, model_config: Optional[Dict[str, Any]] = None) -> Any:
         """
-        모델 준비 (vLLM 엔진 생성)
+        Prepare model (create vLLM engine)
 
         Args:
-            model: 모델 이름/경로 또는 PyTorch 모델
-            model_config: vLLM 설정 옵션
+            model: Model name/path or PyTorch model
+            model_config: vLLM configuration options
 
         Returns:
-            vLLM LLM 인스턴스
+            vLLM LLM instance
         """
         config = model_config or {}
 
-        # 모델 이름 추출
+        # Extract model name
         if isinstance(model, str):
             model_name = model
         elif hasattr(model, "name_or_path"):
@@ -108,26 +111,26 @@ class VLLMBackend(Backend):
 
     def execute(self, model: Any, inputs: Any, **kwargs) -> Any:
         """
-        vLLM으로 추론 실행
+        Execute inference with vLLM
 
         Args:
-            model: vLLM LLM 인스턴스
-            inputs: 프롬프트 문자열 또는 리스트
-            **kwargs: SamplingParams 옵션
+            model: vLLM LLM instance
+            inputs: Prompt string or list
+            **kwargs: SamplingParams options
 
         Returns:
-            생성된 텍스트
+            Generated text
         """
         from vllm import SamplingParams
 
-        # SamplingParams 설정
+        # Configure SamplingParams
         sampling_params = SamplingParams(
             temperature=kwargs.get("temperature", 0.7),
             top_p=kwargs.get("top_p", 0.95),
             max_tokens=kwargs.get("max_tokens", 256),
         )
 
-        # 입력 처리
+        # Process input
         if isinstance(inputs, str):
             prompts = [inputs]
         elif isinstance(inputs, list):
@@ -135,13 +138,13 @@ class VLLMBackend(Backend):
         else:
             prompts = [str(inputs)]
 
-        # 추론 실행
+        # Execute inference
         outputs = model.generate(prompts, sampling_params)
 
         return outputs
 
     def get_device_info(self) -> DeviceInfo:
-        """GPU 디바이스 정보 반환"""
+        """Return GPU device information"""
         try:
             import torch
 
@@ -166,12 +169,13 @@ class VLLMBackend(Backend):
             )
 
     def cleanup(self) -> None:
-        """GPU 리소스 정리"""
+        """Cleanup GPU resources"""
         self._llm_engine = None
         self._model_name = None
 
         try:
             import torch
+
             torch.cuda.empty_cache()
         except Exception:
             pass

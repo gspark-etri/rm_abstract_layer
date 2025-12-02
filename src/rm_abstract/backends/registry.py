@@ -16,6 +16,7 @@ def register_all_backends() -> None:
     # GPU 백엔드 등록
     try:
         from .gpu.vllm_backend import VLLMBackend
+
         DeviceFlowController.register_backend("gpu", VLLMBackend)
         logger.debug("Registered GPU (vLLM) backend")
     except ImportError as e:
@@ -24,6 +25,7 @@ def register_all_backends() -> None:
     # CPU 백엔드 등록
     try:
         from .cpu.cpu_backend import CPUBackend
+
         DeviceFlowController.register_backend("cpu", CPUBackend)
         logger.debug("Registered CPU backend")
     except ImportError as e:
@@ -32,6 +34,7 @@ def register_all_backends() -> None:
     # Rebellions NPU 백엔드 등록
     try:
         from .npu.plugins.rebellions import RBLNBackend
+
         DeviceFlowController.register_backend("rbln", RBLNBackend)
         logger.debug("Registered Rebellions (RBLN) backend")
     except ImportError as e:
@@ -40,6 +43,7 @@ def register_all_backends() -> None:
     # FuriosaAI NPU 백엔드 등록
     try:
         from .npu.plugins.furiosa import FuriosaBackend
+
         DeviceFlowController.register_backend("furiosa", FuriosaBackend)
         logger.debug("Registered FuriosaAI backend")
     except ImportError as e:

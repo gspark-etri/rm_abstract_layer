@@ -1,7 +1,8 @@
 """
-RM Abstract Layer - 이종 AI 반도체 통합 호환 라이브러리
+RM Abstract Layer - Heterogeneous AI Accelerator Unified Compatibility Library
 
-기존 GPU 추론 스크립트를 코드 수정 없이 NPU/GPU 어디서든 실행 가능하도록 하는 추상화 레이어
+An abstraction layer that enables existing GPU inference scripts to run on NPU/GPU
+without any code modification.
 """
 
 from typing import Optional, Dict, Any
@@ -24,36 +25,36 @@ def init(
     verbose: bool = True,
 ) -> DeviceFlowController:
     """
-    RM Abstract Layer 초기화
+    Initialize RM Abstract Layer
 
     Args:
-        device: 디바이스 지정
-            - "auto": 자동 선택 (NPU > GPU > CPU 순)
-            - "gpu:0", "gpu:1": 특정 GPU
+        device: Device specification
+            - "auto": Auto-select (NPU > GPU > CPU priority)
+            - "gpu:0", "gpu:1": Specific GPU
             - "rbln:0": Rebellions ATOM NPU
             - "furiosa:0": FuriosaAI RNGD NPU
             - "cpu": CPU
-        cache_dir: NPU 컴파일 캐시 디렉토리 (기본값: ~/.rm_abstract/cache)
-        compile_options: NPU 컴파일 옵션
-        verbose: 컴파일 진행상황 출력 여부
+        cache_dir: NPU compilation cache directory (default: ~/.rm_abstract/cache)
+        compile_options: NPU compilation options
+        verbose: Whether to print compilation progress
 
     Returns:
-        DeviceFlowController 인스턴스
+        DeviceFlowController instance
 
     Example:
         >>> import rm_abstract
         >>> rm_abstract.init(device="rbln:0")
-        >>> # 이후 기존 코드 그대로 사용
+        >>> # Use existing code as-is
         >>> from transformers import AutoModelForCausalLM
         >>> model = AutoModelForCausalLM.from_pretrained("gpt2")
     """
     global _global_controller
 
-    # 환경 변수에서 설정 로드
+    # Load settings from environment variables
     device = os.environ.get("RM_DEVICE", device)
     cache_dir = os.environ.get("RM_CACHE_DIR", cache_dir)
 
-    # Config 생성
+    # Create Config
     config = Config(
         device=device,
         cache_dir=cache_dir,
@@ -61,7 +62,7 @@ def init(
         verbose=verbose,
     )
 
-    # Controller 생성 및 초기화
+    # Create and initialize Controller
     _global_controller = DeviceFlowController(config)
     _global_controller.activate_hooks()
 
@@ -73,10 +74,10 @@ def init(
 
 def switch_device(device: str) -> None:
     """
-    런타임에 디바이스 전환
+    Switch device at runtime
 
     Args:
-        device: 새로운 디바이스 지정
+        device: New device specification
     """
     global _global_controller
 
@@ -88,10 +89,10 @@ def switch_device(device: str) -> None:
 
 def get_device_info() -> Dict[str, Any]:
     """
-    현재 디바이스 정보 반환
+    Return current device information
 
     Returns:
-        디바이스 정보 딕셔너리
+        Device information dictionary
     """
     global _global_controller
 
@@ -103,9 +104,9 @@ def get_device_info() -> Dict[str, Any]:
 
 def get_controller() -> Optional[DeviceFlowController]:
     """
-    현재 글로벌 컨트롤러 반환
+    Return current global controller
 
     Returns:
-        DeviceFlowController 인스턴스 또는 None
+        DeviceFlowController instance or None
     """
     return _global_controller

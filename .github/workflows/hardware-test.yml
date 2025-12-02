@@ -1,9 +1,9 @@
 name: Hardware Tests (Self-hosted)
 
-# Self-hosted runner에서만 실행
-# NPU/GPU 서버에 runner를 설치한 후 사용
+# Runs only on self-hosted runners
+# Use after installing runner on NPU/GPU server
 on:
-  workflow_dispatch:  # 수동 실행
+  workflow_dispatch:  # Manual trigger
     inputs:
       device:
         description: 'Device to test (gpu, rbln, furiosa)'
@@ -17,7 +17,7 @@ on:
           - all
 
 jobs:
-  # GPU 테스트 (NVIDIA)
+  # GPU Test (NVIDIA)
   test-gpu:
     name: GPU Test (vLLM)
     if: ${{ github.event.inputs.device == 'gpu' || github.event.inputs.device == 'all' }}
@@ -42,7 +42,7 @@ jobs:
           python -c "import rm_abstract; rm_abstract.init(device='gpu:0'); print(rm_abstract.get_device_info())"
           pytest tests/ -v -k "gpu" --tb=short
 
-  # Rebellions NPU 테스트
+  # Rebellions NPU Test
   test-rbln:
     name: Rebellions NPU Test
     if: ${{ github.event.inputs.device == 'rbln' || github.event.inputs.device == 'all' }}
@@ -68,7 +68,7 @@ jobs:
           python -c "import rm_abstract; rm_abstract.init(device='rbln:0'); print(rm_abstract.get_device_info())"
           pytest tests/ -v -k "rbln or npu" --tb=short
 
-  # FuriosaAI NPU 테스트
+  # FuriosaAI NPU Test
   test-furiosa:
     name: FuriosaAI NPU Test
     if: ${{ github.event.inputs.device == 'furiosa' || github.event.inputs.device == 'all' }}

@@ -1,7 +1,7 @@
 """
-NPU 백엔드 공통 베이스 클래스
+NPU Backend Common Base Class
 
-NPU 특화 기능 (컴파일, 캐싱, ONNX 변환) 포함
+Includes NPU-specific features (compilation, caching, ONNX conversion)
 """
 
 from abc import abstractmethod
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 class NPUBackendBase(NPUBackend):
     """
-    NPU 백엔드 공통 베이스 클래스
+    NPU Backend Common Base Class
 
-    모든 NPU 벤더 백엔드가 상속받아 구현
+    All NPU vendor backends inherit and implement this class.
     """
 
     def __init__(
@@ -27,48 +27,48 @@ class NPUBackendBase(NPUBackend):
         device_id: int = 0,
         cache_dir: Optional[str] = None,
         compile_options: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(device_id, cache_dir, compile_options, **kwargs)
 
-        # 캐시 디렉토리 설정
+        # Set cache directory
         if self.cache_dir is None:
             self.cache_dir = os.path.join(Path.home(), ".rm_abstract", "cache", self.name)
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
 
     def prepare_model(self, model: Any, model_config: Optional[Dict[str, Any]] = None) -> Any:
         """
-        모델 준비 (ONNX 변환 → NPU 컴파일)
+        Prepare model (ONNX conversion → NPU compilation)
 
-        1. 캐시 확인
-        2. 캐시 없으면 ONNX 변환 → NPU 컴파일 → 캐시 저장
-        3. 컴파일된 모델 반환
+        1. Check cache
+        2. If no cache: ONNX conversion → NPU compilation → save to cache
+        3. Return compiled model
 
         Args:
-            model: PyTorch 모델 또는 모델 경로
-            model_config: 모델 설정
+            model: PyTorch model or model path
+            model_config: Model configuration
 
         Returns:
-            NPU에서 실행 가능한 컴파일된 모델
+            Compiled model executable on NPU
         """
         config = model_config or {}
         cache_key = self.get_cache_key(model, config)
         cache_path = os.path.join(self.cache_dir, f"{cache_key}.{self.compiled_model_extension}")
 
-        # 1. 캐시 확인
+        # 1. Check cache
         if os.path.exists(cache_path):
             logger.info(f"Loading compiled model from cache: {cache_path}")
             return self.load_compiled_model(cache_path)
 
-        # 2. ONNX 변환
+        # 2. Convert to ONNX
         logger.info("Converting model to ONNX...")
         onnx_path = self._convert_to_onnx(model, config)
 
-        # 3. NPU 컴파일
+        # 3. Compile for NPU
         logger.info(f"Compiling model for {self.name}...")
         compiled_model = self.compile_model(onnx_path, **self.compile_options)
 
-        # 4. 캐시 저장
+        # 4. Save to cache
         logger.info(f"Saving compiled model to cache: {cache_path}")
         self.save_compiled_model(compiled_model, cache_path)
 
@@ -77,35 +77,35 @@ class NPUBackendBase(NPUBackend):
     @property
     @abstractmethod
     def compiled_model_extension(self) -> str:
-        """컴파일된 모델 파일 확장자 (예: 'rbln', 'enf')"""
+        """Compiled model file extension (e.g., 'rbln', 'enf')"""
         ...
 
     def _convert_to_onnx(self, model: Any, config: Dict[str, Any]) -> str:
         """
-        PyTorch 모델을 ONNX로 변환
+        Convert PyTorch model to ONNX
 
         Args:
-            model: PyTorch 모델
-            config: 변환 설정
+            model: PyTorch model
+            config: Conversion configuration
 
         Returns:
-            ONNX 파일 경로
+            ONNX file path
         """
         import torch
 
         cache_key = self.get_cache_key(model, config)
         onnx_path = os.path.join(self.cache_dir, f"{cache_key}.onnx")
 
-        # 이미 ONNX 파일이 있으면 재사용
+        # Reuse if ONNX file already exists
         if os.path.exists(onnx_path):
             logger.debug(f"Using existing ONNX file: {onnx_path}")
             return onnx_path
 
-        # 더미 입력 생성
+        # Create dummy input
         batch_size = config.get("batch_size", 1)
         seq_length = config.get("seq_length", 128)
 
-        # 모델 타입에 따라 더미 입력 생성
+        # Create dummy input based on model type
         if hasattr(model, "config"):
             vocab_size = getattr(model.config, "vocab_size", 32000)
         else:
@@ -113,7 +113,7 @@ class NPUBackendBase(NPUBackend):
 
         dummy_input = torch.randint(0, vocab_size, (batch_size, seq_length))
 
-        # ONNX 내보내기
+        # Export to ONNX
         torch.onnx.export(
             model,
             dummy_input,
@@ -132,19 +132,19 @@ class NPUBackendBase(NPUBackend):
 
     def execute(self, model: Any, inputs: Any, **kwargs) -> Any:
         """
-        NPU에서 추론 실행
+        Execute inference on NPU
 
         Args:
-            model: 컴파일된 NPU 모델
-            inputs: 입력 데이터
-            **kwargs: 추가 옵션
+            model: Compiled NPU model
+            inputs: Input data
+            **kwargs: Additional options
 
         Returns:
-            추론 결과
+            Inference result
         """
         return self._execute_on_npu(model, inputs, **kwargs)
 
     @abstractmethod
     def _execute_on_npu(self, model: Any, inputs: Any, **kwargs) -> Any:
-        """벤더별 NPU 추론 실행"""
+        """Execute NPU inference (vendor-specific)"""
         ...

@@ -31,7 +31,9 @@ def activate_transformers_hook(controller) -> None:
         def patched_from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
             """모델 로드 후 자동으로 백엔드 준비"""
             # 원본 메서드 호출
-            model = _original_from_pretrained.__func__(cls, pretrained_model_name_or_path, *args, **kwargs)
+            model = _original_from_pretrained.__func__(
+                cls, pretrained_model_name_or_path, *args, **kwargs
+            )
 
             # 컨트롤러로 모델 준비
             if _controller is not None:
@@ -56,6 +58,7 @@ def deactivate_transformers_hook() -> None:
 
     try:
         from transformers import PreTrainedModel
+
         PreTrainedModel.from_pretrained = _original_from_pretrained
         _original_from_pretrained = None
         _controller = None

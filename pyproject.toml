@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rm-abstract"
 version = "0.1.0"
-description = "이종 AI 반도체 통합 호환 라이브러리 - GPU/NPU 추상화 레이어"
+description = "Heterogeneous AI Accelerator Unified Compatibility Library - GPU/NPU Abstraction Layer"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
@@ -36,12 +36,12 @@ gpu = [
     "vllm>=0.4.0",
 ]
 npu-rebellions = [
-    # Rebellions SDK는 별도 설치 필요
-    # pip install rebel (Rebellions에서 제공)
+    # Rebellions SDK requires separate installation
+    # pip install rebel (provided by Rebellions)
 ]
 npu-furiosa = [
-    # Furiosa SDK는 별도 설치 필요
-    # pip install furiosa-sdk (FuriosaAI에서 제공)
+    # Furiosa SDK requires separate installation
+    # pip install furiosa-sdk (provided by FuriosaAI)
 ]
 transformers = [
     "transformers>=4.30.0",

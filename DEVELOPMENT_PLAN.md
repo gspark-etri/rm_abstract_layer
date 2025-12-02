@@ -1,23 +1,23 @@
-# 이종 AI 반도체 통합 호환 라이브러리 (RM Abstract Layer)
+# Heterogeneous AI Accelerator Unified Compatibility Library (RM Abstract Layer)
 
-## 프로젝트 개요
+## Project Overview
 
-**핵심 목표**: 기존 GPU 추론 스크립트를 **코드 수정 없이** NPU/GPU 어디서든 실행 가능하도록 하는 추상화 레이어
+**Core Goal**: An abstraction layer that enables existing GPU inference scripts to run on NPU/GPU **without code modification**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                     기존 사용자 추론 코드 (수정 없음)                      │
+│                    Existing User Inference Code (unchanged)              │
 │   model = AutoModelForCausalLM.from_pretrained("llama")                 │
 │   output = model.generate(input_ids)                                    │
 ├─────────────────────────────────────────────────────────────────────────┤
-│                    RM Abstract Layer (1줄 추가)                          │
+│                    RM Abstract Layer (add 1 line)                        │
 │   import rm_abstract; rm_abstract.init(device="npu:0")                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                    Device Flow Controller                         │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │  │
 │  │  │  GPU Flow   │  │  NPU Flow   │  │  CPU Flow   │               │  │
-│  │  │ (직접실행)   │  │ (컴파일→실행)│  │ (직접실행)   │               │  │
+│  │  │ (direct)    │  │(compile→run)│  │ (direct)    │               │  │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘               │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -30,29 +30,29 @@
 
 ---
 
-## 지원 환경
+## Supported Environments
 
-### 추론 엔진
-| 디바이스 | 추론 엔진 | 비고 |
-|----------|-----------|------|
-| **GPU** | vLLM | Continuous Batching, Tensor Parallel 지원 |
-| **NPU (Rebellions)** | RBLN Runtime / rbln-vllm | ATOM NPU용 추론 |
-| **NPU (FuriosaAI)** | Furiosa Runtime | RNGD NPU용 추론 |
-| **CPU** | PyTorch / ONNX Runtime | Fallback용 |
+### Inference Engines
+| Device | Inference Engine | Notes |
+|--------|------------------|-------|
+| **GPU** | vLLM | Continuous Batching, Tensor Parallel support |
+| **NPU (Rebellions)** | RBLN Runtime / rbln-vllm | ATOM NPU inference |
+| **NPU (FuriosaAI)** | Furiosa Runtime | RNGD NPU inference |
+| **CPU** | PyTorch / ONNX Runtime | Fallback |
 
-### NPU 벤더
-| 벤더 | NPU 모델 | SDK | 특징 |
-|------|----------|-----|------|
-| **Rebellions** | ATOM | RBLN SDK | LLM 특화, vLLM 호환 |
-| **FuriosaAI** | RNGD | Furiosa SDK | LLM 특화, 고성능 추론 |
+### NPU Vendors
+| Vendor | NPU Model | SDK | Features |
+|--------|-----------|-----|----------|
+| **Rebellions** | ATOM | RBLN SDK | LLM optimized, vLLM compatible |
+| **FuriosaAI** | RNGD | Furiosa SDK | LLM optimized, high-performance inference |
 
 ---
 
-## 핵심 설계 원칙
+## Core Design Principles
 
-### 1. Zero Code Change (코드 무수정 원칙)
+### 1. Zero Code Change
 ```python
-# 기존 추론 코드 (이 코드는 절대 수정하지 않음)
+# Existing inference code (never modify this code)
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b")
@@ -64,47 +64,47 @@ print(tokenizer.decode(outputs[0]))
 ```
 
 ```python
-# RM Abstract Layer 적용 (1줄만 추가)
+# With RM Abstract Layer (add only 1 line)
 import rm_abstract
-rm_abstract.init(device="npu:0")  # 이 한 줄만 추가!
+rm_abstract.init(device="npu:0")  # Add only this line!
 
-# 이하 기존 코드 그대로
+# Rest of the code remains the same
 from transformers import AutoModelForCausalLM, AutoTokenizer
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b")
-# ... 나머지 동일
+# ... same as before
 ```
 
-### 2. Device-Aware Flow (디바이스별 자동 플로우)
+### 2. Device-Aware Flow
 ```
-Device 설정
+Device Configuration
     │
-    ├─→ GPU 감지 → GPU Flow (직접 실행, PyTorch 그대로 사용)
+    ├─→ GPU detected → GPU Flow (direct execution, use PyTorch as-is)
     │
-    ├─→ NPU 감지 → NPU Flow
+    ├─→ NPU detected → NPU Flow
     │       │
-    │       ├─→ 컴파일된 모델 캐시 존재? → 캐시 로드 → 실행
+    │       ├─→ Compiled model cache exists? → Load cache → Execute
     │       │
-    │       └─→ 캐시 없음 → 모델 변환(ONNX) → NPU 컴파일 → 캐시 저장 → 실행
+    │       └─→ No cache → Convert to ONNX → NPU compile → Save cache → Execute
     │
-    └─→ CPU 감지 → CPU Flow (PyTorch CPU 실행)
+    └─→ CPU detected → CPU Flow (PyTorch CPU execution)
 ```
 
-### 3. Transparent Compilation (투명한 컴파일)
-- NPU는 컴파일이 필요하지만, 사용자는 이를 인지하지 않아도 됨
-- 최초 실행 시 자동 컴파일, 이후 캐시 사용
-- 컴파일 진행 상황은 로깅으로 표시
+### 3. Transparent Compilation
+- NPU requires compilation, but users don't need to be aware of it
+- Automatic compilation on first run, cache used afterwards
+- Compilation progress shown via logging
 
 ---
 
-## Phase 1: 핵심 인프라 구축
+## Phase 1: Core Infrastructure
 
-### 1.1 프로젝트 초기 설정
-- [ ] Python 패키지 구조 설계
-- [ ] pyproject.toml 구성
-- [ ] 의존성 관리 (requirements.txt)
+### 1.1 Project Initial Setup
+- [ ] Python package structure design
+- [ ] pyproject.toml configuration
+- [ ] Dependency management (requirements.txt)
 
-### 1.2 핵심 추상화 인터페이스
-- [ ] `Backend` 추상 베이스 클래스
+### 1.2 Core Abstraction Interfaces
+- [ ] `Backend` abstract base class
   ```python
   class Backend(ABC):
       @abstractmethod
@@ -112,7 +112,7 @@ Device 설정
 
       @abstractmethod
       def prepare_model(self, model) -> Any:
-          """GPU: 그대로 반환, NPU: 컴파일 후 반환"""
+          """GPU: return as-is, NPU: return after compilation"""
           ...
 
       @abstractmethod
@@ -122,46 +122,46 @@ Device 설정
       def get_device_info(self) -> DeviceInfo: ...
   ```
 
-- [ ] `DeviceFlowController` 클래스
+- [ ] `DeviceFlowController` class
   ```python
   class DeviceFlowController:
       def __init__(self, device: str):
           self.backend = self._select_backend(device)
 
       def _select_backend(self, device: str) -> Backend:
-          """device 문자열 파싱하여 적절한 백엔드 반환"""
+          """Parse device string and return appropriate backend"""
           ...
 
       def intercept_model_call(self, model, method_name, *args, **kwargs):
-          """모델 메서드 호출을 가로채서 적절한 백엔드로 라우팅"""
+          """Intercept model method calls and route to appropriate backend"""
           ...
   ```
 
-- [ ] `ModelInterceptor` 클래스 (핵심!)
+- [ ] `ModelInterceptor` class (key component!)
   ```python
   class ModelInterceptor:
-      """PyTorch 모델의 forward/generate 등을 투명하게 가로채기"""
+      """Transparently intercept PyTorch model's forward/generate etc."""
 
       def wrap(self, model):
-          """모델의 핵심 메서드를 백엔드 aware하게 래핑"""
+          """Wrap model's key methods to be backend-aware"""
           original_forward = model.forward
           model.forward = self._create_intercepted_forward(original_forward)
           return model
   ```
 
-### 1.3 자동 Hooking 시스템
-- [ ] `transformers` 라이브러리 monkey-patching
-- [ ] `torch.nn.Module` 레벨 후킹
-- [ ] 모델 로드 시점 자동 감지 및 래핑
+### 1.3 Auto Hooking System
+- [ ] `transformers` library monkey-patching
+- [ ] `torch.nn.Module` level hooking
+- [ ] Auto-detect and wrap models at load time
 
 ---
 
-## Phase 2: GPU 백엔드 (vLLM 통합)
+## Phase 2: GPU Backend (vLLM Integration)
 
-### 2.1 GPU Backend 구현 (vLLM 기반)
+### 2.1 GPU Backend Implementation (vLLM-based)
 ```python
 class GPUBackend(Backend):
-    """GPU 백엔드 - vLLM 추론 엔진 활용"""
+    """GPU Backend - utilizing vLLM inference engine"""
 
     def __init__(self, device_id: int = 0):
         self.device_id = device_id
@@ -169,7 +169,7 @@ class GPUBackend(Backend):
 
     def prepare_model(self, model_name_or_path: str, **kwargs):
         from vllm import LLM
-        # vLLM 엔진 초기화
+        # Initialize vLLM engine
         self.llm_engine = LLM(
             model=model_name_or_path,
             tensor_parallel_size=kwargs.get("tensor_parallel_size", 1),
@@ -185,36 +185,36 @@ class GPUBackend(Backend):
         return self.llm_engine.generate(prompts, sampling_params)
 ```
 
-### 2.2 vLLM 통합 옵션
+### 2.2 vLLM Integration Options
 ```python
-# vLLM 기반 GPU 추론 예시
+# vLLM-based GPU inference example
 import rm_abstract
 
 rm_abstract.init(
     device="gpu:0",
-    inference_engine="vllm",  # vLLM 사용
+    inference_engine="vllm",  # Use vLLM
     engine_options={
-        "tensor_parallel_size": 2,  # 멀티 GPU
+        "tensor_parallel_size": 2,  # Multi-GPU
         "dtype": "float16",
         "gpu_memory_utilization": 0.85,
     }
 )
 ```
 
-- [ ] vLLM 엔진 통합
-- [ ] CUDA 가용성 체크
-- [ ] 멀티 GPU 지원 (Tensor Parallel)
-- [ ] 메모리 관리 유틸리티
-- [ ] Continuous Batching 활용
+- [ ] vLLM engine integration
+- [ ] CUDA availability check
+- [ ] Multi-GPU support (Tensor Parallel)
+- [ ] Memory management utilities
+- [ ] Continuous Batching utilization
 
 ---
 
-## Phase 3: NPU 백엔드 (컴파일 플로우 포함)
+## Phase 3: NPU Backend (Compilation Flow Included)
 
-### 3.1 NPU 공통 인터페이스
+### 3.1 NPU Common Interface
 ```python
 class NPUBackend(Backend, ABC):
-    """NPU 백엔드 공통 베이스 - 컴파일 플로우 포함"""
+    """NPU Backend common base - includes compilation flow"""
 
     def __init__(self, device_id: int, cache_dir: str):
         self.cache_dir = cache_dir
@@ -223,33 +223,33 @@ class NPUBackend(Backend, ABC):
     def prepare_model(self, model):
         cache_key = self._get_cache_key(model)
 
-        # 1. 캐시 확인
+        # 1. Check cache
         if self._cache_exists(cache_key):
             return self._load_from_cache(cache_key)
 
-        # 2. ONNX 변환
+        # 2. Convert to ONNX
         onnx_model = self._convert_to_onnx(model)
 
-        # 3. NPU 컴파일 (벤더별 구현)
+        # 3. NPU compilation (vendor-specific implementation)
         compiled = self._compile_for_npu(onnx_model)
 
-        # 4. 캐시 저장
+        # 4. Save to cache
         self._save_to_cache(cache_key, compiled)
 
         return compiled
 
     @abstractmethod
     def _compile_for_npu(self, onnx_model) -> Any:
-        """벤더별 NPU 컴파일러 호출"""
+        """Call vendor-specific NPU compiler"""
         ...
 
     @abstractmethod
     def _execute_on_npu(self, compiled_model, inputs) -> Any:
-        """벤더별 NPU 런타임 실행"""
+        """Execute on vendor-specific NPU runtime"""
         ...
 ```
 
-### 3.2 NPU 컴파일 파이프라인
+### 3.2 NPU Compilation Pipeline
 ```
 PyTorch Model
      │
@@ -265,12 +265,12 @@ PyTorch Model
      │
      ▼
 ┌─────────────────┐
-│  NPU Compiler   │  벤더별 SDK (compile_model())
+│  NPU Compiler   │  Vendor SDK (compile_model())
 └─────────────────┘
      │
      ▼
 ┌─────────────────┐
-│  Compiled Model │  .npu, .enf, .blob 등 벤더별 포맷
+│  Compiled Model │  .npu, .enf, .blob etc. vendor-specific format
 └─────────────────┘
      │
      ▼
@@ -279,22 +279,22 @@ PyTorch Model
 └─────────────────┘
 ```
 
-### 3.3 NPU 벤더별 백엔드 구현
+### 3.3 NPU Vendor-specific Backend Implementation
 
-#### 지원 NPU 벤더
-| 벤더 | SDK | 컴파일러 | 런타임 | 비고 |
-|------|-----|---------|--------|------|
+#### Supported NPU Vendors
+| Vendor | SDK | Compiler | Runtime | Notes |
+|--------|-----|----------|---------|-------|
 | **Rebellions** | RBLN SDK | rbln-compiler | RBLN Runtime | ATOM NPU |
 | **FuriosaAI** | Furiosa SDK | furiosa-compiler | furiosa-runtime | RNGD NPU |
 
-#### Rebellions (RBLN) 백엔드
+#### Rebellions (RBLN) Backend
 ```python
 class RBLNBackend(NPUBackend):
-    """Rebellions ATOM NPU 백엔드"""
+    """Rebellions ATOM NPU Backend"""
 
     def _compile_for_npu(self, onnx_model):
         import rebel
-        # RBLN 컴파일러로 모델 컴파일
+        # Compile model with RBLN compiler
         compiled = rebel.compile_from_onnx(
             onnx_model,
             target="atom",
@@ -308,17 +308,17 @@ class RBLNBackend(NPUBackend):
         return runtime.run(compiled_model, inputs)
 ```
 
-#### FuriosaAI (RNGD) 백엔드
+#### FuriosaAI (RNGD) Backend
 ```python
 class FuriosaBackend(NPUBackend):
-    """FuriosaAI RNGD NPU 백엔드"""
+    """FuriosaAI RNGD NPU Backend"""
 
     def _compile_for_npu(self, onnx_model):
         from furiosa import compiler
-        # Furiosa 컴파일러로 모델 컴파일
+        # Compile model with Furiosa compiler
         compiled = compiler.compile(
             onnx_model,
-            target="rngd",  # RNGD NPU 타겟
+            target="rngd",  # RNGD NPU target
             batch_size=1
         )
         return compiled
@@ -329,23 +329,23 @@ class FuriosaBackend(NPUBackend):
         return sess.run(inputs)
 ```
 
-- [ ] Rebellions RBLN SDK 연동
-- [ ] FuriosaAI SDK 연동
-- [ ] NPU 벤더 플러그인 인터페이스 정의
-- [ ] 플러그인 자동 탐지 및 로드
-- [ ] 벤더 SDK 없을 시 graceful fallback
+- [ ] Rebellions RBLN SDK integration
+- [ ] FuriosaAI SDK integration
+- [ ] NPU vendor plugin interface definition
+- [ ] Plugin auto-discovery and loading
+- [ ] Graceful fallback when vendor SDK is unavailable
 
-### 3.4 컴파일 캐시 시스템
-- [ ] 모델 해시 기반 캐시 키 생성
-- [ ] 캐시 디렉토리 관리 (`~/.rm_abstract/cache/`)
-- [ ] 캐시 무효화 정책 (모델 변경, SDK 버전 변경 등)
-- [ ] 캐시 통계 및 관리 CLI
+### 3.4 Compilation Cache System
+- [ ] Model hash-based cache key generation
+- [ ] Cache directory management (`~/.rm_abstract/cache/`)
+- [ ] Cache invalidation policy (model change, SDK version change, etc.)
+- [ ] Cache statistics and management CLI
 
 ---
 
-## Phase 4: 투명한 통합 API
+## Phase 4: Transparent Integration API
 
-### 4.1 메인 진입점
+### 4.1 Main Entry Point
 ```python
 # rm_abstract/__init__.py
 
@@ -356,13 +356,13 @@ def init(device: str = "auto",
          compile_options: dict = None,
          verbose: bool = True):
     """
-    RM Abstract Layer 초기화
+    Initialize RM Abstract Layer
 
     Args:
-        device: "auto", "gpu:0", "npu:0", "cpu" 등
-        cache_dir: NPU 컴파일 캐시 디렉토리
-        compile_options: NPU 컴파일 옵션
-        verbose: 컴파일 진행상황 출력 여부
+        device: "auto", "gpu:0", "npu:0", "cpu" etc.
+        cache_dir: NPU compilation cache directory
+        compile_options: NPU compilation options
+        verbose: Show compilation progress
     """
     global _global_controller
     _global_controller = DeviceFlowController(
@@ -372,17 +372,17 @@ def init(device: str = "auto",
         verbose=verbose
     )
 
-    # Transformers 자동 후킹
+    # Auto-hook Transformers
     _hook_transformers()
 
-    # PyTorch 모델 자동 후킹
+    # Auto-hook PyTorch modules
     _hook_pytorch_modules()
 ```
 
-### 4.2 자동 후킹 시스템
+### 4.2 Auto Hooking System
 ```python
 def _hook_transformers():
-    """Hugging Face Transformers 라이브러리 자동 패칭"""
+    """Auto-patch Hugging Face Transformers library"""
     try:
         import transformers
 
@@ -395,10 +395,10 @@ def _hook_transformers():
 
         transformers.PreTrainedModel.from_pretrained = classmethod(patched_from_pretrained)
     except ImportError:
-        pass  # transformers 미설치 시 무시
+        pass  # Ignore if transformers not installed
 
 def _hook_pytorch_modules():
-    """PyTorch nn.Module 후킹"""
+    """Hook PyTorch nn.Module"""
     import torch.nn as nn
 
     original_call = nn.Module.__call__
@@ -412,130 +412,130 @@ def _hook_pytorch_modules():
     nn.Module.__call__ = patched_call
 ```
 
-### 4.3 사용 예시
+### 4.3 Usage Examples
 
-#### 예시 1: 기본 사용 (가장 간단)
+#### Example 1: Basic Usage (simplest)
 ```python
 import rm_abstract
 rm_abstract.init(device="npu:0")
 
-# 이하 기존 코드 100% 동일
+# Below code is 100% identical to original
 from transformers import pipeline
 generator = pipeline("text-generation", model="gpt2")
 result = generator("Hello, I'm a language model")
 ```
 
-#### 예시 2: 환경 변수로 설정
+#### Example 2: Environment Variable Configuration
 ```bash
 export RM_DEVICE="npu:0"
 export RM_CACHE_DIR="/data/npu_cache"
-python existing_inference_script.py  # 코드 수정 없이!
+python existing_inference_script.py  # No code modification!
 ```
 
 ```python
-# existing_inference_script.py (수정 없음, 단 rm_abstract import만 추가)
-import rm_abstract  # 환경 변수 자동 인식
-rm_abstract.init()  # 환경 변수에서 설정 로드
+# existing_inference_script.py (no modification, just add rm_abstract import)
+import rm_abstract  # Auto-recognize environment variables
+rm_abstract.init()  # Load settings from environment variables
 
 from transformers import AutoModelForCausalLM
-# ... 기존 코드 그대로
+# ... existing code as-is
 ```
 
-#### 예시 3: 명시적 컴파일 제어
+#### Example 3: Explicit Compilation Control
 ```python
 import rm_abstract
 
-# NPU 컴파일 옵션 상세 설정
+# Detailed NPU compilation options
 rm_abstract.init(
     device="npu:0",
     compile_options={
         "optimization_level": 3,
         "precision": "fp16",
-        "batch_size": [1, 4, 8],  # 동적 배치
+        "batch_size": [1, 4, 8],  # Dynamic batch
     },
-    verbose=True  # 컴파일 진행상황 출력
+    verbose=True  # Show compilation progress
 )
 
 from transformers import AutoModelForCausalLM
 model = AutoModelForCausalLM.from_pretrained("llama-7b")
-# 최초 실행 시: "Compiling model for NPU... [====>    ] 45%"
-# 이후 실행 시: "Loading compiled model from cache..."
+# First run: "Compiling model for NPU... [====>    ] 45%"
+# Subsequent runs: "Loading compiled model from cache..."
 ```
 
-#### 예시 4: 디바이스 전환
+#### Example 4: Device Switching
 ```python
 import rm_abstract
 
-# GPU로 시작
+# Start with GPU
 rm_abstract.init(device="gpu:0")
-# ... 추론 실행 ...
+# ... run inference ...
 
-# NPU로 전환
+# Switch to NPU
 rm_abstract.switch_device("npu:0")
-# ... 동일 코드로 NPU에서 추론 ...
+# ... run inference on NPU with same code ...
 ```
 
 ---
 
-## Phase 5: 테스트 및 검증
+## Phase 5: Testing and Validation
 
-### 5.1 단위 테스트
-- [ ] 각 백엔드 기본 기능
-- [ ] 후킹 시스템 정상 동작
-- [ ] 캐시 시스템
+### 5.1 Unit Tests
+- [ ] Each backend basic functionality
+- [ ] Hooking system proper operation
+- [ ] Cache system
 
-### 5.2 통합 테스트
-- [ ] 실제 모델 (GPT-2, BERT, LLaMA) 테스트
-- [ ] GPU ↔ NPU 결과 일치성 검증
-- [ ] 다양한 추론 시나리오
+### 5.2 Integration Tests
+- [ ] Real model tests (GPT-2, BERT, LLaMA)
+- [ ] GPU ↔ NPU result consistency verification
+- [ ] Various inference scenarios
 
-### 5.3 성능 벤치마크
-- [ ] 추상화 오버헤드 측정
-- [ ] 컴파일 시간 측정
-- [ ] 캐시 히트율 분석
-
----
-
-## Phase 6: 문서화 및 배포
-
-### 6.1 문서화
-- [ ] Quick Start 가이드
-- [ ] NPU 벤더 플러그인 개발 가이드
-- [ ] API 레퍼런스
-- [ ] FAQ / 트러블슈팅
-
-### 6.2 배포
-- [ ] PyPI 패키지
-- [ ] Docker 이미지 (NPU SDK 포함)
-- [ ] CI/CD 파이프라인
+### 5.3 Performance Benchmarks
+- [ ] Abstraction overhead measurement
+- [ ] Compilation time measurement
+- [ ] Cache hit rate analysis
 
 ---
 
-## 프로젝트 구조
+## Phase 6: Documentation and Deployment
+
+### 6.1 Documentation
+- [ ] Quick Start guide
+- [ ] NPU vendor plugin development guide
+- [ ] API reference
+- [ ] FAQ / Troubleshooting
+
+### 6.2 Deployment
+- [ ] PyPI package
+- [ ] Docker image (with NPU SDK)
+- [ ] CI/CD pipeline
+
+---
+
+## Project Structure
 
 ```
 rm_abstract_layer/
 ├── src/
 │   └── rm_abstract/
-│       ├── __init__.py              # 메인 진입점 (init, switch_device)
+│       ├── __init__.py              # Main entry point (init, switch_device)
 │       ├── core/
 │       │   ├── __init__.py
 │       │   ├── backend.py           # Backend ABC
 │       │   ├── controller.py        # DeviceFlowController
 │       │   ├── interceptor.py       # ModelInterceptor
-│       │   └── config.py            # 설정 관리
+│       │   └── config.py            # Configuration management
 │       ├── backends/
 │       │   ├── __init__.py
-│       │   ├── registry.py          # 백엔드 플러그인 레지스트리
+│       │   ├── registry.py          # Backend plugin registry
 │       │   ├── gpu/
 │       │   │   ├── __init__.py
 │       │   │   └── cuda_backend.py  # GPU Passthrough
 │       │   ├── npu/
 │       │   │   ├── __init__.py
-│       │   │   ├── base.py          # NPU 공통 (컴파일 플로우)
-│       │   │   ├── compiler.py      # 컴파일 파이프라인
-│       │   │   ├── cache.py         # 컴파일 캐시 관리
-│       │   │   └── plugins/         # 벤더별 플러그인
+│       │   │   ├── base.py          # NPU common (compilation flow)
+│       │   │   ├── compiler.py      # Compilation pipeline
+│       │   │   ├── cache.py         # Compilation cache management
+│       │   │   └── plugins/         # Vendor-specific plugins
 │       │   │       ├── __init__.py
 │       │   │       ├── rebellions.py    # Rebellions ATOM
 │       │   │       └── furiosa.py       # FuriosaAI RNGD
@@ -544,11 +544,11 @@ rm_abstract_layer/
 │       │       └── cpu_backend.py
 │       ├── hooks/
 │       │   ├── __init__.py
-│       │   ├── transformers_hook.py # HF Transformers 후킹
-│       │   └── pytorch_hook.py      # PyTorch 모듈 후킹
+│       │   ├── transformers_hook.py # HF Transformers hooking
+│       │   └── pytorch_hook.py      # PyTorch module hooking
 │       ├── conversion/
 │       │   ├── __init__.py
-│       │   └── onnx_utils.py        # ONNX 변환 유틸리티
+│       │   └── onnx_utils.py        # ONNX conversion utilities
 │       └── utils/
 │           ├── __init__.py
 │           ├── logger.py
@@ -569,10 +569,10 @@ rm_abstract_layer/
 
 ---
 
-## 핵심 Flow 다이어그램
+## Core Flow Diagram
 
 ```
-사용자 코드 실행
+User Code Execution
        │
        ▼
 rm_abstract.init(device="npu:0")
@@ -580,8 +580,8 @@ rm_abstract.init(device="npu:0")
        ▼
 ┌─────────────────────────────┐
 │   DeviceFlowController      │
-│   - 백엔드 선택 (NPUBackend) │
-│   - 후킹 시스템 활성화       │
+│   - Select backend (NPU)    │
+│   - Activate hooking system │
 └─────────────────────────────┘
        │
        ▼
@@ -589,20 +589,20 @@ model = AutoModel.from_pretrained("llama")
        │
        ▼
 ┌─────────────────────────────┐
-│   Transformers Hook 발동    │
-│   - from_pretrained 가로채기 │
+│   Transformers Hook Fired   │
+│   - Intercept from_pretrained│
 └─────────────────────────────┘
        │
        ▼
 ┌─────────────────────────────┐
 │   NPUBackend.prepare_model  │
 │   ┌───────────────────────┐ │
-│   │ 캐시 확인             │ │
-│   │   ├─ Hit → 로드       │ │
-│   │   └─ Miss → 컴파일    │ │
-│   │       ├─ ONNX 변환    │ │
-│   │       ├─ NPU 컴파일   │ │
-│   │       └─ 캐시 저장    │ │
+│   │ Check cache           │ │
+│   │   ├─ Hit → Load       │ │
+│   │   └─ Miss → Compile   │ │
+│   │       ├─ ONNX convert │ │
+│   │       ├─ NPU compile  │ │
+│   │       └─ Save cache   │ │
 │   └───────────────────────┘ │
 └─────────────────────────────┘
        │
@@ -611,31 +611,31 @@ model.generate(inputs)
        │
        ▼
 ┌─────────────────────────────┐
-│   PyTorch Hook 발동         │
-│   - __call__ 가로채기       │
+│   PyTorch Hook Fired        │
+│   - Intercept __call__      │
 └─────────────────────────────┘
        │
        ▼
 ┌─────────────────────────────┐
 │   NPUBackend.execute        │
-│   - NPU 런타임 실행         │
-│   - 결과 반환               │
+│   - Run on NPU runtime      │
+│   - Return result           │
 └─────────────────────────────┘
        │
        ▼
-output (사용자에게 반환)
+output (returned to user)
 ```
 
 ---
 
-## 다음 단계
+## Next Steps
 
-1. **Phase 1 시작**: 프로젝트 구조 생성 및 핵심 인터페이스 구현
-2. Backend ABC, DeviceFlowController, ModelInterceptor 구현
-3. GPU 백엔드 (Passthrough) 구현으로 기본 동작 검증
-4. NPU 컴파일 플로우 및 캐시 시스템 구현
+1. **Start Phase 1**: Create project structure and implement core interfaces
+2. Implement Backend ABC, DeviceFlowController, ModelInterceptor
+3. Implement GPU backend (Passthrough) to verify basic operation
+4. Implement NPU compilation flow and cache system
 
 ---
 
-*문서 작성일: 2025-12-02*
-*버전: 0.2.0-draft*
+*Document created: 2025-12-02*
+*Version: 0.2.0-draft*

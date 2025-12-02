@@ -1,13 +1,13 @@
 """
-디바이스 전환 예시
+Device Switching Example
 
-런타임에 디바이스를 전환하는 방법을 보여줍니다.
+Demonstrates how to switch devices at runtime.
 """
 
 import rm_abstract
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# GPU로 시작
+# Start with GPU
 rm_abstract.init(device="gpu:0", verbose=True)
 
 model_name = "gpt2"
@@ -22,19 +22,19 @@ inputs = tokenizer("GPU inference test:", return_tensors="pt")
 outputs = model.generate(**inputs, max_length=30)
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
-# NPU로 전환
+# Switch to NPU
 print("\n" + "=" * 50)
 print("Switching to NPU...")
 print("=" * 50)
 
 rm_abstract.switch_device("rbln:0")
 
-# 동일한 코드로 NPU에서 추론
+# Inference on NPU with same code
 model = AutoModelForCausalLM.from_pretrained(model_name)
 inputs = tokenizer("NPU inference test:", return_tensors="pt")
 outputs = model.generate(**inputs, max_length=30)
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
-# 디바이스 정보 확인
+# Check device info
 print("\nCurrent Device:")
 print(rm_abstract.get_device_info())

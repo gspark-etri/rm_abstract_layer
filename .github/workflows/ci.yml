@@ -5,12 +5,12 @@ on:
     branches: [master, main, develop]
   pull_request:
     branches: [master, main]
-  # 매주 월요일 09:00 (KST) 정기 실행
+  # Weekly run every Monday 09:00 (KST)
   schedule:
     - cron: '0 0 * * 1'
 
 jobs:
-  # 코드 품질 검사
+  # Code quality check
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
       - name: Type check with MyPy
         run: mypy src/rm_abstract --ignore-missing-imports
 
-  # 단위 테스트 (다중 Python 버전)
+  # Unit tests (multiple Python versions)
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: false
 
-  # Mock 기반 통합 테스트 (하드웨어 없이)
+  # Mock-based integration tests (without hardware)
   integration-mock:
     name: Integration Test (Mock)
     runs-on: ubuntu-latest
@@ -94,9 +94,9 @@ jobs:
 
       - name: Run mock integration tests
         run: pytest tests/integration -v --tb=short
-        continue-on-error: true  # 통합 테스트는 일부 실패 허용
+        continue-on-error: true  # Allow some failures in integration tests
 
-  # 패키지 빌드 테스트
+  # Package build test
   build:
     name: Build Package
     runs-on: ubuntu-latest

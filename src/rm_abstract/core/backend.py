@@ -1,7 +1,7 @@
 """
-Backend 추상 베이스 클래스
+Backend Abstract Base Class
 
-모든 디바이스 백엔드(GPU, NPU, CPU)가 구현해야 하는 인터페이스 정의
+Defines the interface that all device backends (GPU, NPU, CPU) must implement.
 """
 
 from abc import ABC, abstractmethod
@@ -11,7 +11,8 @@ from enum import Enum
 
 
 class DeviceType(Enum):
-    """디바이스 타입"""
+    """Device type enumeration"""
+
     GPU = "gpu"
     NPU = "npu"
     CPU = "cpu"
@@ -20,7 +21,8 @@ class DeviceType(Enum):
 
 @dataclass
 class DeviceInfo:
-    """디바이스 정보"""
+    """Device information"""
+
     device_type: DeviceType
     device_id: int
     name: str
@@ -32,16 +34,16 @@ class DeviceInfo:
 
 class Backend(ABC):
     """
-    Backend 추상 베이스 클래스
+    Backend Abstract Base Class
 
-    모든 디바이스 백엔드가 구현해야 하는 공통 인터페이스
+    Common interface that all device backends must implement.
     """
 
     def __init__(self, device_id: int = 0, **kwargs):
         """
         Args:
-            device_id: 디바이스 인덱스 (0, 1, 2, ...)
-            **kwargs: 백엔드별 추가 옵션
+            device_id: Device index (0, 1, 2, ...)
+            **kwargs: Additional backend-specific options
         """
         self.device_id = device_id
         self.options = kwargs
@@ -50,82 +52,82 @@ class Backend(ABC):
     @property
     @abstractmethod
     def device_type(self) -> DeviceType:
-        """디바이스 타입 반환"""
+        """Return device type"""
         ...
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """백엔드 이름 반환 (예: 'CUDA', 'RBLN', 'Furiosa')"""
+        """Return backend name (e.g., 'CUDA', 'RBLN', 'Furiosa')"""
         ...
 
     @abstractmethod
     def is_available(self) -> bool:
         """
-        해당 백엔드 사용 가능 여부 확인
+        Check if this backend is available
 
         Returns:
-            사용 가능하면 True
+            True if available
         """
         ...
 
     @abstractmethod
     def initialize(self) -> None:
         """
-        백엔드 초기화
+        Initialize the backend
 
-        디바이스 연결, 런타임 초기화 등 수행
+        Performs device connection, runtime initialization, etc.
         """
         ...
 
     @abstractmethod
     def prepare_model(self, model: Any, model_config: Optional[Dict[str, Any]] = None) -> Any:
         """
-        모델 준비
+        Prepare model for execution
 
-        - GPU: 모델을 GPU로 이동 (passthrough)
-        - NPU: ONNX 변환 → NPU 컴파일 → 컴파일된 모델 반환
-        - CPU: 모델 그대로 반환 (passthrough)
+        - GPU: Move model to GPU (passthrough)
+        - NPU: ONNX conversion → NPU compilation → return compiled model
+        - CPU: Return model as-is (passthrough)
 
         Args:
-            model: PyTorch 모델 또는 모델 경로
-            model_config: 모델 관련 설정 (배치 크기, 정밀도 등)
+            model: PyTorch model or model path
+            model_config: Model configuration (batch size, precision, etc.)
 
         Returns:
-            준비된 모델 (백엔드에서 실행 가능한 형태)
+            Prepared model (ready for execution on the backend)
         """
         ...
 
     @abstractmethod
     def execute(self, model: Any, inputs: Any, **kwargs) -> Any:
         """
-        추론 실행
+        Execute inference
 
         Args:
-            model: prepare_model()로 준비된 모델
-            inputs: 입력 데이터
-            **kwargs: 추가 실행 옵션
+            model: Model prepared by prepare_model()
+            inputs: Input data
+            **kwargs: Additional execution options
 
         Returns:
-            추론 결과
+            Inference result
         """
         ...
 
     @abstractmethod
     def get_device_info(self) -> DeviceInfo:
         """
-        디바이스 정보 반환
+        Return device information
 
         Returns:
-            DeviceInfo 객체
+            DeviceInfo object
         """
         ...
 
     def cleanup(self) -> None:
         """
-        백엔드 정리
+        Cleanup backend
 
-        리소스 해제, 메모리 정리 등
+        Release resources, clear memory, etc.
         """
         self._initialized = False
 
@@ -135,9 +137,9 @@ class Backend(ABC):
 
 class NPUBackend(Backend, ABC):
     """
-    NPU 백엔드 공통 베이스 클래스
+    NPU Backend Common Base Class
 
-    NPU 특화 기능 (컴파일, 캐싱) 포함
+    Includes NPU-specific features (compilation, caching).
     """
 
     def __init__(
@@ -145,7 +147,7 @@ class NPUBackend(Backend, ABC):
         device_id: int = 0,
         cache_dir: Optional[str] = None,
         compile_options: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(device_id, **kwargs)
         self.cache_dir = cache_dir
@@ -159,56 +161,56 @@ class NPUBackend(Backend, ABC):
     @abstractmethod
     def compile_model(self, model: Any, **kwargs) -> Any:
         """
-        모델을 NPU용으로 컴파일
+        Compile model for NPU
 
         Args:
-            model: ONNX 모델 또는 PyTorch 모델
-            **kwargs: 컴파일 옵션
+            model: ONNX model or PyTorch model
+            **kwargs: Compilation options
 
         Returns:
-            컴파일된 모델
+            Compiled model
         """
         ...
 
     @abstractmethod
     def load_compiled_model(self, path: str) -> Any:
         """
-        컴파일된 모델 로드
+        Load compiled model
 
         Args:
-            path: 컴파일된 모델 파일 경로
+            path: Compiled model file path
 
         Returns:
-            로드된 컴파일 모델
+            Loaded compiled model
         """
         ...
 
     @abstractmethod
     def save_compiled_model(self, model: Any, path: str) -> None:
         """
-        컴파일된 모델 저장
+        Save compiled model
 
         Args:
-            model: 컴파일된 모델
-            path: 저장 경로
+            model: Compiled model
+            path: Save path
         """
         ...
 
     def get_cache_key(self, model: Any, config: Optional[Dict[str, Any]] = None) -> str:
         """
-        모델 캐시 키 생성
+        Generate model cache key
 
         Args:
-            model: 모델 객체
-            config: 모델 설정
+            model: Model object
+            config: Model configuration
 
         Returns:
-            캐시 키 문자열
+            Cache key string
         """
         import hashlib
 
-        # 모델 이름/경로와 설정을 조합하여 해시 생성
-        model_name = getattr(model, 'name_or_path', str(type(model).__name__))
+        # Generate hash from model name/path and configuration
+        model_name = getattr(model, "name_or_path", str(type(model).__name__))
         config_str = str(sorted(config.items())) if config else ""
 
         key_string = f"{model_name}_{self.name}_{config_str}"

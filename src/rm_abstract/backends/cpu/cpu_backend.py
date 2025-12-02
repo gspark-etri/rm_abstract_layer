@@ -1,7 +1,7 @@
 """
-CPU 백엔드
+CPU Backend
 
-PyTorch CPU를 사용한 추론 (Fallback용)
+Inference using PyTorch CPU (Fallback)
 """
 
 from typing import Any, Dict, Optional
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 class CPUBackend(Backend):
     """
-    CPU 백엔드
+    CPU Backend
 
-    GPU/NPU 사용 불가시 Fallback으로 사용
+    Used as fallback when GPU/NPU is unavailable
     """
 
     def __init__(self, device_id: int = 0, **kwargs):
@@ -31,15 +31,16 @@ class CPUBackend(Backend):
         return "cpu"
 
     def is_available(self) -> bool:
-        """CPU는 항상 사용 가능"""
+        """CPU is always available"""
         try:
             import torch
+
             return True
         except ImportError:
             return False
 
     def initialize(self) -> None:
-        """CPU 백엔드 초기화"""
+        """Initialize CPU backend"""
         if self._initialized:
             return
 
@@ -48,14 +49,14 @@ class CPUBackend(Backend):
 
     def prepare_model(self, model: Any, model_config: Optional[Dict[str, Any]] = None) -> Any:
         """
-        모델 준비 (CPU로 이동)
+        Prepare model (move to CPU)
 
         Args:
-            model: PyTorch 모델
-            model_config: 모델 설정
+            model: PyTorch model
+            model_config: Model configuration
 
         Returns:
-            CPU로 이동된 모델
+            Model moved to CPU
         """
         import torch
 
@@ -70,33 +71,35 @@ class CPUBackend(Backend):
 
     def execute(self, model: Any, inputs: Any, **kwargs) -> Any:
         """
-        CPU에서 추론 실행
+        Execute inference on CPU
 
         Args:
-            model: PyTorch 모델
-            inputs: 입력 데이터
-            **kwargs: 추가 옵션
+            model: PyTorch model
+            inputs: Input data
+            **kwargs: Additional options
 
         Returns:
-            추론 결과
+            Inference result
         """
         import torch
 
         with torch.no_grad():
-            # 입력이 텐서인 경우 CPU로 이동
+            # Move tensor inputs to CPU
             if isinstance(inputs, torch.Tensor):
                 inputs = inputs.to("cpu")
             elif isinstance(inputs, dict):
-                inputs = {k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+                inputs = {
+                    k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()
+                }
 
-            # generate 메서드가 있으면 사용 (LLM용)
+            # Use generate method if available (for LLMs)
             if hasattr(model, "generate"):
                 return model.generate(**inputs if isinstance(inputs, dict) else inputs, **kwargs)
             else:
                 return model(inputs)
 
     def get_device_info(self) -> DeviceInfo:
-        """CPU 디바이스 정보 반환"""
+        """Return CPU device information"""
         import platform
         import os
 
@@ -112,5 +115,5 @@ class CPUBackend(Backend):
         )
 
     def cleanup(self) -> None:
-        """CPU 리소스 정리"""
+        """Cleanup CPU resources"""
         super().cleanup()

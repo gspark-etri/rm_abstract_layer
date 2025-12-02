@@ -100,6 +100,7 @@ def optimize_onnx(
             logger.warning("ONNX simplification failed, keeping original")
             if output_path != input_path:
                 import shutil
+
                 shutil.copy(input_path, output_path)
 
         return output_path

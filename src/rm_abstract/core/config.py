@@ -1,5 +1,5 @@
 """
-설정 관리 모듈
+Configuration management module
 """
 
 from dataclasses import dataclass, field
@@ -10,41 +10,41 @@ import os
 
 @dataclass
 class Config:
-    """RM Abstract Layer 설정"""
+    """RM Abstract Layer configuration"""
 
-    # 디바이스 설정
+    # Device settings
     device: str = "auto"
 
-    # 캐시 설정
+    # Cache settings
     cache_dir: Optional[str] = None
 
-    # NPU 컴파일 옵션
+    # NPU compilation options
     compile_options: Dict[str, Any] = field(default_factory=dict)
 
-    # 로깅 설정
+    # Logging settings
     verbose: bool = True
 
-    # 추론 엔진 옵션 (vLLM 등)
+    # Inference engine options (vLLM, etc.)
     engine_options: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        # 기본 캐시 디렉토리 설정
+        # Set default cache directory
         if self.cache_dir is None:
             self.cache_dir = os.path.join(Path.home(), ".rm_abstract", "cache")
 
-        # 캐시 디렉토리 생성
+        # Create cache directory
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
 
     @property
     def device_type(self) -> str:
-        """디바이스 타입 파싱 (gpu, rbln, furiosa, cpu, auto)"""
+        """Parse device type (gpu, rbln, furiosa, cpu, auto)"""
         if self.device == "auto":
             return "auto"
         return self.device.split(":")[0].lower()
 
     @property
     def device_id(self) -> int:
-        """디바이스 ID 파싱"""
+        """Parse device ID"""
         if self.device == "auto" or ":" not in self.device:
             return 0
         try:
@@ -53,15 +53,15 @@ class Config:
             return 0
 
     def get_compile_option(self, key: str, default: Any = None) -> Any:
-        """컴파일 옵션 조회"""
+        """Get compile option"""
         return self.compile_options.get(key, default)
 
     def get_engine_option(self, key: str, default: Any = None) -> Any:
-        """엔진 옵션 조회"""
+        """Get engine option"""
         return self.engine_options.get(key, default)
 
     def to_dict(self) -> Dict[str, Any]:
-        """설정을 딕셔너리로 변환"""
+        """Convert configuration to dictionary"""
         return {
             "device": self.device,
             "cache_dir": self.cache_dir,
@@ -72,12 +72,12 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Config":
-        """딕셔너리에서 설정 생성"""
+        """Create configuration from dictionary"""
         return cls(**data)
 
     @classmethod
     def from_env(cls) -> "Config":
-        """환경 변수에서 설정 로드"""
+        """Load configuration from environment variables"""
         return cls(
             device=os.environ.get("RM_DEVICE", "auto"),
             cache_dir=os.environ.get("RM_CACHE_DIR"),

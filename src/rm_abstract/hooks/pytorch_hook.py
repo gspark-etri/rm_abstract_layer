@@ -52,6 +52,7 @@ def deactivate_pytorch_hook() -> None:
 
     try:
         import torch.nn as nn
+
         nn.Module.__call__ = _original_module_call
         _original_module_call = None
         _controller = None

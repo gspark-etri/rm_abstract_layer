@@ -44,14 +44,14 @@ class TestGPUBackendMock:
 
     def test_gpu_backend_not_available_without_cuda(self):
         """CUDA 없을 때 GPU 백엔드 비가용 테스트"""
-        with patch.dict(sys.modules, {'vllm': None}):
+        with patch.dict(sys.modules, {"vllm": None}):
             from rm_abstract.backends.gpu.vllm_backend import VLLMBackend
 
             backend = VLLMBackend()
             # vLLM import 실패 시 False
             assert backend.is_available() is False
 
-    @patch('torch.cuda.is_available', return_value=False)
+    @patch("torch.cuda.is_available", return_value=False)
     def test_gpu_backend_no_cuda(self, mock_cuda):
         """CUDA 미지원 환경 테스트"""
         from rm_abstract.backends.gpu.vllm_backend import VLLMBackend
@@ -66,9 +66,10 @@ class TestNPUBackendMock:
     def test_rebellions_backend_not_available_without_sdk(self):
         """Rebellions SDK 없을 때 테스트"""
         # rebel 모듈이 없으면 import 실패
-        with patch.dict(sys.modules, {'rebel': None}):
+        with patch.dict(sys.modules, {"rebel": None}):
             try:
                 from rm_abstract.backends.npu.plugins.rebellions import RBLNBackend
+
                 backend = RBLNBackend()
                 assert backend.is_available() is False
             except ImportError:
@@ -77,9 +78,10 @@ class TestNPUBackendMock:
 
     def test_furiosa_backend_not_available_without_sdk(self):
         """Furiosa SDK 없을 때 테스트"""
-        with patch.dict(sys.modules, {'furiosa': None, 'furiosa.runtime': None}):
+        with patch.dict(sys.modules, {"furiosa": None, "furiosa.runtime": None}):
             try:
                 from rm_abstract.backends.npu.plugins.furiosa import FuriosaBackend
+
                 backend = FuriosaBackend()
                 assert backend.is_available() is False
             except ImportError:
@@ -115,6 +117,7 @@ class TestInitFunction:
         # 레지스트리 초기화 및 CPU 백엔드 등록
         DeviceFlowController._backend_registry.clear()
         from rm_abstract.backends.cpu.cpu_backend import CPUBackend
+
         DeviceFlowController.register_backend("cpu", CPUBackend)
 
         controller = rm_abstract.init(device="cpu", verbose=False)
@@ -129,6 +132,7 @@ class TestInitFunction:
 
         DeviceFlowController._backend_registry.clear()
         from rm_abstract.backends.cpu.cpu_backend import CPUBackend
+
         DeviceFlowController.register_backend("cpu", CPUBackend)
 
         controller = rm_abstract.init(device="cpu", verbose=False)
@@ -142,6 +146,7 @@ class TestInitFunction:
 
         DeviceFlowController._backend_registry.clear()
         from rm_abstract.backends.cpu.cpu_backend import CPUBackend
+
         DeviceFlowController.register_backend("cpu", CPUBackend)
 
         rm_abstract.init(device="cpu", verbose=False)

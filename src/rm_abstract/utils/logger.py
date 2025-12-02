@@ -7,7 +7,7 @@ import sys
 def setup_logger(
     name: str = "rm_abstract",
     level: int = logging.INFO,
-    format_string: str = "[%(name)s] %(levelname)s: %(message)s"
+    format_string: str = "[%(name)s] %(levelname)s: %(message)s",
 ) -> logging.Logger:
     """
     로거 설정

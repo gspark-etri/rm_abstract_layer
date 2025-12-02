@@ -1,16 +1,16 @@
 # RM Abstract Layer
 
-이종 AI 반도체 통합 호환 라이브러리 - GPU/NPU 추상화 레이어
+Heterogeneous AI Accelerator Unified Compatibility Library - GPU/NPU Abstraction Layer
 
-## 개요
+## Overview
 
-기존 GPU 추론 스크립트를 **코드 수정 없이** NPU/GPU 어디서든 실행 가능하도록 하는 추상화 레이어 라이브러리입니다.
+An abstraction layer library that enables existing GPU inference scripts to run on NPU/GPU **without code modification**.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  기존 사용자 추론 코드 (수정 없음)             │
+│              Existing User Inference Code (unchanged)        │
 ├─────────────────────────────────────────────────────────────┤
-│                 RM Abstract Layer (1줄 추가)                 │
+│               RM Abstract Layer (add 1 line)                 │
 │    import rm_abstract; rm_abstract.init(device="npu:0")     │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────┬─────────────┬─────────────┐                │
@@ -20,38 +20,38 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 특징
+## Features
 
-- **Zero Code Change**: 기존 추론 코드 수정 없이 1줄 추가만으로 동작
-- **투명한 컴파일**: NPU 컴파일이 필요한 경우 자동으로 처리 (캐싱 지원)
-- **디바이스 자동 선택**: `device="auto"`로 최적의 디바이스 자동 선택
-- **플러그인 아키텍처**: 새로운 NPU 벤더 쉽게 추가 가능
+- **Zero Code Change**: Works by adding just 1 line to existing inference code
+- **Transparent Compilation**: Automatically handles NPU compilation when needed (with caching)
+- **Auto Device Selection**: Automatically selects optimal device with `device="auto"`
+- **Plugin Architecture**: Easy to add new NPU vendor backends
 
-## 지원 환경
+## Supported Environments
 
-| 디바이스 | 추론 엔진 | NPU 모델 |
-|----------|-----------|----------|
+| Device | Inference Engine | NPU Model |
+|--------|------------------|-----------|
 | GPU | vLLM | NVIDIA CUDA |
 | NPU (Rebellions) | RBLN Runtime | ATOM |
 | NPU (FuriosaAI) | Furiosa Runtime | RNGD |
 | CPU | PyTorch | - |
 
-## 설치
+## Installation
 
 ```bash
 pip install rm-abstract
 ```
 
-## 빠른 시작
+## Quick Start
 
-### 기본 사용법
+### Basic Usage
 
 ```python
-# 1줄만 추가하면 됩니다!
+# Just add 1 line!
 import rm_abstract
-rm_abstract.init(device="npu:0")  # 또는 "gpu:0", "auto"
+rm_abstract.init(device="npu:0")  # or "gpu:0", "auto"
 
-# 이하 기존 코드 그대로 사용
+# Use existing code as-is
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b")
@@ -62,7 +62,7 @@ outputs = model.generate(**inputs)
 print(tokenizer.decode(outputs[0]))
 ```
 
-### 환경 변수로 설정
+### Environment Variable Configuration
 
 ```bash
 export RM_DEVICE="npu:0"
@@ -70,7 +70,7 @@ export RM_CACHE_DIR="/data/npu_cache"
 python your_inference_script.py
 ```
 
-### 디바이스 옵션
+### Device Options
 
 ```python
 import rm_abstract
@@ -84,11 +84,11 @@ rm_abstract.init(device="rbln:0")
 # FuriosaAI RNGD NPU
 rm_abstract.init(device="furiosa:0")
 
-# 자동 선택
+# Auto selection
 rm_abstract.init(device="auto")
 ```
 
-### 컴파일 옵션 (NPU)
+### Compilation Options (NPU)
 
 ```python
 import rm_abstract
@@ -100,11 +100,11 @@ rm_abstract.init(
         "precision": "fp16",
     },
     cache_dir="~/.rm_abstract/cache",
-    verbose=True  # 컴파일 진행상황 출력
+    verbose=True  # Show compilation progress
 )
 ```
 
-## 동작 원리
+## How It Works
 
 ```
 rm_abstract.init(device="npu:0")
@@ -112,8 +112,8 @@ rm_abstract.init(device="npu:0")
         ▼
 ┌───────────────────────┐
 │ DeviceFlowController  │
-│ - 백엔드 선택          │
-│ - 후킹 시스템 활성화    │
+│ - Select backend      │
+│ - Activate hooks      │
 └───────────────────────┘
         │
         ▼
@@ -122,10 +122,10 @@ model = AutoModel.from_pretrained("llama")
         ▼
 ┌───────────────────────┐
 │ NPUBackend.prepare    │
-│ - 캐시 확인            │
-│ - ONNX 변환           │
-│ - NPU 컴파일          │
-│ - 캐시 저장            │
+│ - Check cache         │
+│ - Convert to ONNX     │
+│ - Compile for NPU     │
+│ - Save to cache       │
 └───────────────────────┘
         │
         ▼
@@ -134,46 +134,46 @@ model.generate(inputs)
         ▼
 ┌───────────────────────┐
 │ NPUBackend.execute    │
-│ - NPU 런타임 실행      │
+│ - Run on NPU runtime  │
 └───────────────────────┘
 ```
 
-## 프로젝트 구조
+## Project Structure
 
 ```
 rm_abstract_layer/
 ├── src/rm_abstract/
-│   ├── __init__.py           # 메인 진입점
+│   ├── __init__.py           # Main entry point
 │   ├── core/
 │   │   ├── backend.py        # Backend ABC
 │   │   ├── controller.py     # DeviceFlowController
-│   │   └── config.py         # 설정 관리
+│   │   └── config.py         # Configuration management
 │   ├── backends/
-│   │   ├── gpu/              # vLLM 백엔드
-│   │   ├── npu/              # NPU 백엔드
+│   │   ├── gpu/              # vLLM backend
+│   │   ├── npu/              # NPU backends
 │   │   │   └── plugins/
 │   │   │       ├── rebellions.py
 │   │   │       └── furiosa.py
-│   │   └── cpu/              # CPU 백엔드
-│   └── hooks/                # 자동 후킹 시스템
+│   │   └── cpu/              # CPU backend
+│   └── hooks/                # Auto-hooking system
 ├── tests/
 ├── examples/
 └── docs/
 ```
 
-## 개발 현황
+## Development Status
 
-- [x] Phase 1: 프로젝트 설계 및 계획
-- [ ] Phase 2: 핵심 인프라 구축
-- [ ] Phase 3: GPU 백엔드 (vLLM)
-- [ ] Phase 4: NPU 백엔드 (Rebellions, FuriosaAI)
-- [ ] Phase 5: 테스트 및 검증
-- [ ] Phase 6: 문서화 및 배포
+- [x] Phase 1: Project design and planning
+- [x] Phase 2: Core infrastructure
+- [ ] Phase 3: GPU backend (vLLM)
+- [ ] Phase 4: NPU backends (Rebellions, FuriosaAI)
+- [ ] Phase 5: Testing and validation
+- [ ] Phase 6: Documentation and deployment
 
-## 라이선스
+## License
 
 MIT License
 
-## 기여
+## Contributing
 
-기여를 환영합니다! [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)를 참조하여 개발 계획을 확인해 주세요.
+Contributions are welcome! Please refer to [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the development roadmap.
