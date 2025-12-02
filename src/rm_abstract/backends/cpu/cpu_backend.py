@@ -75,7 +75,7 @@ class CPUBackend(Backend):
 
         Args:
             model: PyTorch model
-            inputs: Input data
+            inputs: Input data (can be tensor, dict, or None)
             **kwargs: Additional options (may include proxy metadata)
 
         Returns:
@@ -88,34 +88,49 @@ class CPUBackend(Backend):
         original_model = kwargs.pop("original_model", None)
 
         with torch.no_grad():
-            # Move tensor inputs to CPU
-            if isinstance(inputs, torch.Tensor):
-                inputs = inputs.to("cpu")
-            elif isinstance(inputs, dict):
-                inputs = {
-                    k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()
+            # Prepare inputs - handle various formats
+            if inputs is None:
+                # All inputs are in kwargs (e.g., input_ids=..., attention_mask=...)
+                exec_kwargs = {
+                    k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()
                 }
+                exec_inputs = None
+            elif isinstance(inputs, dict):
+                # Dict inputs - merge with kwargs, move tensors to CPU
+                exec_kwargs = {**kwargs}
+                for k, v in inputs.items():
+                    exec_kwargs[k] = v.to("cpu") if isinstance(v, torch.Tensor) else v
+                exec_inputs = None
+            elif isinstance(inputs, torch.Tensor):
+                exec_inputs = inputs.to("cpu")
+                exec_kwargs = kwargs
+            else:
+                exec_inputs = inputs
+                exec_kwargs = kwargs
 
             # Route based on proxy method
             if proxy_method == "generate" and hasattr(model, "generate"):
-                if isinstance(inputs, dict):
-                    return model.generate(**inputs, **kwargs)
+                if exec_inputs is None:
+                    return model.generate(**exec_kwargs)
                 else:
-                    return model.generate(inputs, **kwargs)
+                    return model.generate(exec_inputs, **exec_kwargs)
             elif proxy_method in ("forward", "__call__"):
-                if isinstance(inputs, dict):
-                    return model(**inputs)
+                if exec_inputs is None:
+                    return model(**exec_kwargs)
                 else:
-                    return model(inputs)
+                    return model(exec_inputs, **exec_kwargs)
             else:
                 # Default: use generate if available, otherwise forward
                 if hasattr(model, "generate"):
-                    if isinstance(inputs, dict):
-                        return model.generate(**inputs, **kwargs)
+                    if exec_inputs is None:
+                        return model.generate(**exec_kwargs)
                     else:
-                        return model.generate(inputs, **kwargs)
+                        return model.generate(exec_inputs, **exec_kwargs)
                 else:
-                    return model(inputs)
+                    if exec_inputs is None:
+                        return model(**exec_kwargs)
+                    else:
+                        return model(exec_inputs, **exec_kwargs)
 
     def get_device_info(self) -> DeviceInfo:
         """Return CPU device information"""

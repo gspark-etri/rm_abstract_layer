@@ -104,8 +104,9 @@ class ModelProxy:
         Returns:
             Result from backend execution
         """
-        # Extract inputs from args/kwargs
-        inputs = args[0] if args else kwargs.get("input_ids", kwargs.get("inputs", None))
+        # Extract inputs from args - don't extract from kwargs to avoid duplication
+        # If inputs are in kwargs (e.g., input_ids=...), pass None and let backend handle it
+        inputs = args[0] if args else None
 
         # Add method hint for backend
         kwargs["_proxy_method"] = method_name
@@ -122,7 +123,11 @@ class ModelProxy:
             if hasattr(self._original, method_name):
                 logger.warning(f"Falling back to original model.{method_name}()")
                 original_method = getattr(self._original, method_name)
-                return original_method(*args, **kwargs)
+                # Remove proxy-specific kwargs before calling original
+                clean_kwargs = {
+                    k: v for k, v in kwargs.items() if k not in ("_proxy_method", "original_model")
+                }
+                return original_method(*args, **clean_kwargs)
             raise
 
     def __getattr__(self, name: str) -> Any:

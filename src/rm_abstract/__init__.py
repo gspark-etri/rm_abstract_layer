@@ -12,7 +12,13 @@ from .core.controller import DeviceFlowController
 from .core.config import Config
 
 __version__ = "0.1.0"
-__all__ = ["init", "switch_device", "get_device_info", "get_controller"]
+__all__ = [
+    "init",
+    "switch_device",
+    "get_device_info",
+    "get_controller",
+    "get_available_backends",
+]
 
 # Global controller instance
 _global_controller: Optional[DeviceFlowController] = None
@@ -49,6 +55,9 @@ def init(
         >>> model = AutoModelForCausalLM.from_pretrained("gpt2")
     """
     global _global_controller
+
+    # Register all backends
+    _register_backends()
 
     # Load settings from environment variables
     device = os.environ.get("RM_DEVICE", device)
@@ -110,3 +119,50 @@ def get_controller() -> Optional[DeviceFlowController]:
         DeviceFlowController instance or None
     """
     return _global_controller
+
+
+def get_available_backends() -> Dict[str, bool]:
+    """
+    Return available backends
+
+    Returns:
+        Dictionary of {backend_name: is_available}
+    """
+    # Register backends first
+    _register_backends()
+    return DeviceFlowController.get_available_backends()
+
+
+def _register_backends() -> None:
+    """Register all available backends"""
+    # CPU backend (always available if torch is installed)
+    try:
+        from .backends.cpu.cpu_backend import CPUBackend
+
+        DeviceFlowController.register_backend("cpu", CPUBackend)
+    except ImportError:
+        pass
+
+    # GPU backend (vLLM)
+    try:
+        from .backends.gpu.vllm_backend import VLLMBackend
+
+        DeviceFlowController.register_backend("gpu", VLLMBackend)
+    except ImportError:
+        pass
+
+    # Rebellions NPU backend
+    try:
+        from .backends.npu.plugins.rebellions import RBLNBackend
+
+        DeviceFlowController.register_backend("rbln", RBLNBackend)
+    except ImportError:
+        pass
+
+    # FuriosaAI NPU backend
+    try:
+        from .backends.npu.plugins.furiosa import FuriosaBackend
+
+        DeviceFlowController.register_backend("furiosa", FuriosaBackend)
+    except ImportError:
+        pass
