@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rm-abstract"
+version = "0.1.0"
+description = "이종 AI 반도체 통합 호환 라이브러리 - GPU/NPU 추상화 레이어"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "RM Abstract Team"}
+]
+keywords = ["llm", "npu", "gpu", "inference", "abstraction", "vllm", "rebellions", "furiosa"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "onnx>=1.14.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "vllm>=0.4.0",
+]
+npu-rebellions = [
+    # Rebellions SDK는 별도 설치 필요
+    # pip install rebel (Rebellions에서 제공)
+]
+npu-furiosa = [
+    # Furiosa SDK는 별도 설치 필요
+    # pip install furiosa-sdk (FuriosaAI에서 제공)
+]
+transformers = [
+    "transformers>=4.30.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "onnxsim>=0.4.0",
+]
+all = [
+    "rm-abstract[gpu,transformers,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/gspark-etri/rm_abstract_layer"
+Documentation = "https://github.com/gspark-etri/rm_abstract_layer#readme"
+Repository = "https://github.com/gspark-etri/rm_abstract_layer.git"
+Issues = "https://github.com/gspark-etri/rm_abstract_layer/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.mypy_cache
+    | \.venv
+    | build
+    | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

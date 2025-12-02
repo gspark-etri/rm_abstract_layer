@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: 이종 AI 반도체 통합 호환 라이브러리 개발 계획\n\n- DEVELOPMENT_PLAN.md: 프로젝트 설계 문서 추가\n  - GPU (vLLM), NPU (Rebellions ATOM, FuriosaAI RNGD) 지원 계획\n  - Zero Code Change 원칙 기반 추상화 레이어 설계\n  - 6단계 Phase 개발 로드맵\n- .gitignore: Python 프로젝트용 gitignore 추가\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(gh --version:*)",
+      "Bash(winget install:*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth status)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create rm_abstract_layer --public --source=. --remote=origin --push --description \"이종 AI 반도체 통합 호환 라이브러리 - GPU(vLLM), NPU(Rebellions ATOM, FuriosaAI RNGD) 추상화 레이어\")"
     ],
     "deny": [],
     "ask": []
