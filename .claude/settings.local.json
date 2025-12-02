@@ -7,7 +7,9 @@
       "Bash(gh --version:*)",
       "Bash(winget install:*)",
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth status)",
-      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create rm_abstract_layer --public --source=. --remote=origin --push --description \"이종 AI 반도체 통합 호환 라이브러리 - GPU(vLLM), NPU(Rebellions ATOM, FuriosaAI RNGD) 추상화 레이어\")"
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create rm_abstract_layer --public --source=. --remote=origin --push --description \"이종 AI 반도체 통합 호환 라이브러리 - GPU(vLLM), NPU(Rebellions ATOM, FuriosaAI RNGD) 추상화 레이어\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nPhase 1: 프로젝트 초기 구조 및 핵심 인터페이스 구현\n\n## 추가된 파일\n\n### 핵심 모듈 (src/rm_abstract/)\n- core/backend.py: Backend ABC, NPUBackend, DeviceInfo 정의\n- core/controller.py: DeviceFlowController 구현\n- core/config.py: Config 클래스\n\n### 백엔드 구현 (backends/)\n- gpu/vllm_backend.py: vLLM 기반 GPU 백엔드\n- cpu/cpu_backend.py: PyTorch CPU 백엔드\n- npu/base.py: NPU 공통 베이스 클래스\n- npu/plugins/rebellions.py: Rebellions ATOM 백엔드\n- npu/plugins/furiosa.py: FuriosaAI RNGD 백엔드\n\n### 후킹 시스템 (hooks/)\n- transformers_hook.py: HF Transformers 자동 후킹\n- pytorch_hook.py: PyTorch nn.Module 후킹\n\n### 유틸리티\n- conversion/onnx_utils.py: ONNX 변환 유틸리티\n- utils/logger.py: 로깅 유틸리티\n\n### 프로젝트 설정\n- pyproject.toml: 패키지 설정 및 의존성\n- requirements.txt: 의존성 목록\n- README.md: 프로젝트 문서\n\n### 테스트 및 예제\n- tests/unit/test_config.py: Config 클래스 테스트\n- examples/basic_usage.py: 기본 사용 예시\n- examples/device_switching.py: 디바이스 전환 예시\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

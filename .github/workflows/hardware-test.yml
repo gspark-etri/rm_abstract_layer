@@ -1,0 +1,95 @@
+name: Hardware Tests (Self-hosted)
+
+# Self-hosted runner에서만 실행
+# NPU/GPU 서버에 runner를 설치한 후 사용
+on:
+  workflow_dispatch:  # 수동 실행
+    inputs:
+      device:
+        description: 'Device to test (gpu, rbln, furiosa)'
+        required: true
+        default: 'gpu'
+        type: choice
+        options:
+          - gpu
+          - rbln
+          - furiosa
+          - all
+
+jobs:
+  # GPU 테스트 (NVIDIA)
+  test-gpu:
+    name: GPU Test (vLLM)
+    if: ${{ github.event.inputs.device == 'gpu' || github.event.inputs.device == 'all' }}
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check GPU availability
+        run: nvidia-smi
+
+      - name: Set up Python
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install torch vllm transformers
+          pip install pytest pytest-cov
+          pip install -e .
+
+      - name: Run GPU tests
+        env:
+          RM_DEVICE: gpu:0
+        run: |
+          python -c "import rm_abstract; rm_abstract.init(device='gpu:0'); print(rm_abstract.get_device_info())"
+          pytest tests/ -v -k "gpu" --tb=short
+
+  # Rebellions NPU 테스트
+  test-rbln:
+    name: Rebellions NPU Test
+    if: ${{ github.event.inputs.device == 'rbln' || github.event.inputs.device == 'all' }}
+    runs-on: [self-hosted, rbln]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check RBLN NPU availability
+        run: |
+          python3 -c "import rebel; print(rebel.get_devices())"
+
+      - name: Set up Python
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install torch transformers
+          pip install pytest pytest-cov
+          pip install -e .
+
+      - name: Run Rebellions tests
+        env:
+          RM_DEVICE: rbln:0
+        run: |
+          python -c "import rm_abstract; rm_abstract.init(device='rbln:0'); print(rm_abstract.get_device_info())"
+          pytest tests/ -v -k "rbln or npu" --tb=short
+
+  # FuriosaAI NPU 테스트
+  test-furiosa:
+    name: FuriosaAI NPU Test
+    if: ${{ github.event.inputs.device == 'furiosa' || github.event.inputs.device == 'all' }}
+    runs-on: [self-hosted, furiosa]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Furiosa NPU availability
+        run: |
+          python3 -c "from furiosa import runtime; print(runtime.list_devices())"
+
+      - name: Set up Python
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install torch transformers
+          pip install pytest pytest-cov
+          pip install -e .
+
+      - name: Run Furiosa tests
+        env:
+          RM_DEVICE: furiosa:0
+        run: |
+          python -c "import rm_abstract; rm_abstract.init(device='furiosa:0'); print(rm_abstract.get_device_info())"
+          pytest tests/ -v -k "furiosa or npu" --tb=short
