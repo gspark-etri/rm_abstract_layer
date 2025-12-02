@@ -155,7 +155,7 @@ class DeviceFlowController:
             model_config: Model configuration
 
         Returns:
-            Prepared model
+            Prepared model (compiled/optimized for the backend)
         """
         if self._backend is None:
             logger.warning("No backend available, returning original model")
@@ -172,6 +172,55 @@ class DeviceFlowController:
         self._prepared_models[model_id] = prepared
 
         return prepared
+
+    def prepare_model_with_proxy(
+        self, model: Any, model_config: Optional[Dict[str, Any]] = None
+    ) -> Any:
+        """
+        Prepare model and wrap in ModelProxy for transparent interception.
+
+        This is the primary method used by hooks to prepare models.
+        The returned proxy intercepts generate(), forward(), __call__()
+        and routes them to the appropriate backend.
+
+        Args:
+            model: Original model
+            model_config: Model configuration
+
+        Returns:
+            ModelProxy wrapping the original and compiled model
+        """
+        from .model_proxy import ModelProxy, create_model_proxy
+
+        if self._backend is None:
+            logger.warning("No backend available, returning original model")
+            return model
+
+        model_id = id(model)
+
+        # Check if model is already wrapped in proxy
+        if model_id in self._prepared_models:
+            existing = self._prepared_models[model_id]
+            if isinstance(existing, ModelProxy):
+                return existing
+
+        # Prepare model in backend (compile for NPU, etc.)
+        compiled_model = self._backend.prepare_model(model, model_config)
+
+        # Create proxy wrapping both original and compiled model
+        proxy = create_model_proxy(
+            original_model=model,
+            compiled_model=compiled_model,
+            backend=self._backend,
+            controller=self,
+        )
+
+        # Store the proxy
+        self._prepared_models[model_id] = proxy
+
+        logger.info(f"Created ModelProxy for {type(model).__name__} " f"on {self._backend.name}")
+
+        return proxy
 
     def execute(self, model: Any, inputs: Any, **kwargs) -> Any:
         """

@@ -1,7 +1,12 @@
 """
-PyTorch 모듈 후킹
+PyTorch Module Hooking
 
-nn.Module.__call__ 을 가로채서 추론 시 백엔드로 라우팅
+Note: With the ModelProxy pattern, this hook is now optional.
+ModelProxy handles method interception (generate, forward, __call__) directly.
+
+This hook is kept for:
+1. Models loaded without from_pretrained (e.g., custom PyTorch models)
+2. Legacy support for code that creates models directly
 """
 
 from functools import wraps
@@ -10,13 +15,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 원본 함수 저장
+# Store original functions
 _original_module_call = None
 _controller = None
 
 
 def activate_pytorch_hook(controller) -> None:
-    """PyTorch nn.Module 후킹 활성화"""
+    """
+    Activate PyTorch nn.Module hooking
+
+    Note: This is a fallback hook for models not loaded via from_pretrained.
+    For models loaded via from_pretrained, ModelProxy handles interception.
+    """
     global _original_module_call, _controller
 
     try:
@@ -27,13 +37,19 @@ def activate_pytorch_hook(controller) -> None:
 
         @wraps(_original_module_call)
         def patched_call(self, *args, **kwargs):
-            """모델 호출을 가로채서 백엔드로 라우팅"""
-            # 컨트롤러가 있고, 이 모델을 가로채야 하는 경우
+            """Intercept model calls and route to backend"""
+            # Skip if this is already a ModelProxy (avoid double interception)
+            from ..core.model_proxy import ModelProxy
+
+            if isinstance(self, ModelProxy):
+                return _original_module_call(self, *args, **kwargs)
+
+            # If controller exists and model should be intercepted
             if _controller is not None and _controller.should_intercept(self):
                 logger.debug(f"Intercepted model call: {type(self).__name__}")
                 return _controller.execute(self, args[0] if args else kwargs, **kwargs)
 
-            # 원본 메서드 호출
+            # Call original method
             return _original_module_call(self, *args, **kwargs)
 
         nn.Module.__call__ = patched_call
@@ -44,7 +60,7 @@ def activate_pytorch_hook(controller) -> None:
 
 
 def deactivate_pytorch_hook() -> None:
-    """PyTorch nn.Module 후킹 비활성화"""
+    """Deactivate PyTorch nn.Module hooking"""
     global _original_module_call, _controller
 
     if _original_module_call is None:

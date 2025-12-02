@@ -76,12 +76,16 @@ class CPUBackend(Backend):
         Args:
             model: PyTorch model
             inputs: Input data
-            **kwargs: Additional options
+            **kwargs: Additional options (may include proxy metadata)
 
         Returns:
             Inference result
         """
         import torch
+
+        # Extract proxy metadata (set by ModelProxy)
+        proxy_method = kwargs.pop("_proxy_method", None)
+        original_model = kwargs.pop("original_model", None)
 
         with torch.no_grad():
             # Move tensor inputs to CPU
@@ -92,11 +96,26 @@ class CPUBackend(Backend):
                     k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()
                 }
 
-            # Use generate method if available (for LLMs)
-            if hasattr(model, "generate"):
-                return model.generate(**inputs if isinstance(inputs, dict) else inputs, **kwargs)
+            # Route based on proxy method
+            if proxy_method == "generate" and hasattr(model, "generate"):
+                if isinstance(inputs, dict):
+                    return model.generate(**inputs, **kwargs)
+                else:
+                    return model.generate(inputs, **kwargs)
+            elif proxy_method in ("forward", "__call__"):
+                if isinstance(inputs, dict):
+                    return model(**inputs)
+                else:
+                    return model(inputs)
             else:
-                return model(inputs)
+                # Default: use generate if available, otherwise forward
+                if hasattr(model, "generate"):
+                    if isinstance(inputs, dict):
+                        return model.generate(**inputs, **kwargs)
+                    else:
+                        return model.generate(inputs, **kwargs)
+                else:
+                    return model(inputs)
 
     def get_device_info(self) -> DeviceInfo:
         """Return CPU device information"""

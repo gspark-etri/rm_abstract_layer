@@ -137,12 +137,89 @@ class NPUBackendBase(NPUBackend):
         Args:
             model: Compiled NPU model
             inputs: Input data
-            **kwargs: Additional options
+            **kwargs: Additional options (may include proxy metadata)
 
         Returns:
             Inference result
         """
-        return self._execute_on_npu(model, inputs, **kwargs)
+        # Extract proxy metadata (set by ModelProxy)
+        proxy_method = kwargs.pop("_proxy_method", None)
+        original_model = kwargs.pop("original_model", None)
+
+        # Handle different method types from proxy
+        if proxy_method == "generate":
+            return self._execute_generate(model, inputs, original_model, **kwargs)
+        elif proxy_method in ("forward", "__call__"):
+            return self._execute_on_npu(model, inputs, **kwargs)
+        else:
+            # Default to standard NPU execution
+            return self._execute_on_npu(model, inputs, **kwargs)
+
+    def _execute_generate(self, model: Any, inputs: Any, original_model: Any, **kwargs) -> Any:
+        """
+        Execute generate() for text generation models.
+
+        For NPU, this typically involves:
+        1. Tokenization (using original model's tokenizer)
+        2. Iterative token generation on NPU
+        3. Decoding output tokens
+
+        Args:
+            model: Compiled NPU model
+            inputs: Input data (token IDs or text)
+            original_model: Original HuggingFace model (for tokenizer access)
+            **kwargs: Generation parameters (max_length, temperature, etc.)
+        """
+        import torch
+
+        # Extract generation parameters
+        max_new_tokens = kwargs.get("max_new_tokens", kwargs.get("max_length", 128))
+
+        # Get input as tensor
+        if hasattr(inputs, "input_ids"):
+            input_ids = inputs.input_ids
+        elif isinstance(inputs, dict) and "input_ids" in inputs:
+            input_ids = inputs["input_ids"]
+        else:
+            input_ids = inputs
+
+        # Ensure tensor type
+        if not isinstance(input_ids, torch.Tensor):
+            input_ids = torch.tensor(input_ids)
+
+        # Simple greedy generation loop on NPU
+        generated = input_ids
+        for _ in range(max_new_tokens):
+            # Run single forward pass on NPU
+            outputs = self._execute_on_npu(model, generated, **kwargs)
+
+            # Get next token (greedy: argmax of last position)
+            if hasattr(outputs, "logits"):
+                next_token_logits = outputs.logits[:, -1, :]
+            elif isinstance(outputs, dict) and "logits" in outputs:
+                next_token_logits = outputs["logits"][:, -1, :]
+            else:
+                # Assume outputs is raw logits tensor
+                if hasattr(outputs, "shape") and len(outputs.shape) >= 2:
+                    next_token_logits = outputs[:, -1, :]
+                else:
+                    next_token_logits = outputs
+
+            if not isinstance(next_token_logits, torch.Tensor):
+                next_token_logits = torch.tensor(next_token_logits)
+
+            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+
+            # Append to generated sequence
+            generated = torch.cat([generated, next_token], dim=-1)
+
+            # Check for EOS token
+            if original_model is not None and hasattr(original_model, "config"):
+                eos_token_id = getattr(original_model.config, "eos_token_id", None)
+                if eos_token_id is not None and (next_token == eos_token_id).all():
+                    break
+
+        return generated
 
     @abstractmethod
     def _execute_on_npu(self, model: Any, inputs: Any, **kwargs) -> Any:

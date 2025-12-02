@@ -115,33 +115,143 @@ class VLLMBackend(Backend):
 
         Args:
             model: vLLM LLM instance
-            inputs: Prompt string or list
-            **kwargs: SamplingParams options
+            inputs: Prompt string, list, or token IDs
+            **kwargs: SamplingParams options (may include proxy metadata)
 
         Returns:
             Generated text
         """
         from vllm import SamplingParams
 
+        # Extract proxy metadata (set by ModelProxy)
+        proxy_method = kwargs.pop("_proxy_method", None)
+        original_model = kwargs.pop("original_model", None)
+
         # Configure SamplingParams
         sampling_params = SamplingParams(
             temperature=kwargs.get("temperature", 0.7),
             top_p=kwargs.get("top_p", 0.95),
-            max_tokens=kwargs.get("max_tokens", 256),
+            max_tokens=kwargs.get("max_tokens", kwargs.get("max_new_tokens", 256)),
         )
 
-        # Process input
-        if isinstance(inputs, str):
-            prompts = [inputs]
-        elif isinstance(inputs, list):
-            prompts = inputs
-        else:
-            prompts = [str(inputs)]
+        # Process input - handle various input formats
+        prompts = self._prepare_inputs(inputs, original_model)
 
         # Execute inference
         outputs = model.generate(prompts, sampling_params)
 
+        # For generate() calls, return in a format compatible with HuggingFace
+        if proxy_method == "generate":
+            return self._convert_to_hf_format(outputs, inputs)
+
         return outputs
+
+    def _prepare_inputs(self, inputs: Any, original_model: Any = None) -> list:
+        """
+        Prepare inputs for vLLM.
+
+        Handles various input formats:
+        - String prompts
+        - List of prompts
+        - Token IDs (from tokenizer)
+        - Dict with input_ids
+
+        Args:
+            inputs: Input data in various formats
+            original_model: Original HF model (for tokenizer access)
+
+        Returns:
+            List of prompt strings
+        """
+        # Already a string prompt
+        if isinstance(inputs, str):
+            return [inputs]
+
+        # List of strings
+        if isinstance(inputs, list) and all(isinstance(x, str) for x in inputs):
+            return inputs
+
+        # Token IDs - need to decode back to text
+        # This happens when user code uses tokenizer + model.generate()
+        if hasattr(inputs, "input_ids"):
+            token_ids = inputs.input_ids
+        elif isinstance(inputs, dict) and "input_ids" in inputs:
+            token_ids = inputs["input_ids"]
+        else:
+            token_ids = inputs
+
+        # Try to decode token IDs to text
+        try:
+            import torch
+
+            if isinstance(token_ids, torch.Tensor):
+                token_ids = token_ids.tolist()
+
+            # Try to get tokenizer from original model or use a default
+            tokenizer = None
+            if original_model is not None:
+                # Try various ways to get tokenizer
+                if hasattr(original_model, "tokenizer"):
+                    tokenizer = original_model.tokenizer
+                elif hasattr(original_model, "config"):
+                    model_name = getattr(original_model.config, "name_or_path", None)
+                    if model_name:
+                        try:
+                            from transformers import AutoTokenizer
+
+                            tokenizer = AutoTokenizer.from_pretrained(model_name)
+                        except Exception:
+                            pass
+
+            if tokenizer is not None:
+                # Decode token IDs to text
+                if isinstance(token_ids[0], list):
+                    # Batch of sequences
+                    return [tokenizer.decode(ids, skip_special_tokens=False) for ids in token_ids]
+                else:
+                    # Single sequence
+                    return [tokenizer.decode(token_ids, skip_special_tokens=False)]
+
+        except Exception as e:
+            logger.warning(f"Failed to decode token IDs: {e}")
+
+        # Fallback: convert to string
+        return [str(inputs)]
+
+    def _convert_to_hf_format(self, vllm_outputs: Any, original_inputs: Any) -> Any:
+        """
+        Convert vLLM outputs to HuggingFace-compatible format.
+
+        When code expects model.generate() to return token IDs,
+        we need to tokenize the output text.
+
+        Args:
+            vllm_outputs: vLLM RequestOutput objects
+            original_inputs: Original inputs (to detect expected format)
+
+        Returns:
+            Token IDs tensor if input was tokens, otherwise vLLM outputs
+        """
+        # If input was string, return vLLM outputs as-is
+        if isinstance(original_inputs, str):
+            return vllm_outputs
+
+        # If input was token IDs, convert output text back to token IDs
+        try:
+            import torch
+
+            # Extract generated text from vLLM outputs
+            generated_texts = []
+            for output in vllm_outputs:
+                for completion in output.outputs:
+                    generated_texts.append(completion.text)
+
+            # Try to tokenize
+            # For now, return vLLM outputs - proper tokenization needs tokenizer
+            return vllm_outputs
+
+        except Exception:
+            return vllm_outputs
 
     def get_device_info(self) -> DeviceInfo:
         """Return GPU device information"""

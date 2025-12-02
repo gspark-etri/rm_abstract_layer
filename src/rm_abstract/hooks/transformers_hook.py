@@ -1,7 +1,8 @@
 """
-Hugging Face Transformers 후킹
+Hugging Face Transformers Hooking
 
-from_pretrained 메서드를 가로채서 모델 로드 시 자동으로 백엔드 준비
+Intercepts from_pretrained method to automatically prepare models for backends
+and wrap them in ModelProxy for transparent method interception.
 """
 
 from functools import wraps
@@ -10,13 +11,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 원본 함수 저장
+# Store original functions
 _original_from_pretrained = None
 _controller = None
 
 
 def activate_transformers_hook(controller) -> None:
-    """Transformers 라이브러리 후킹 활성화"""
+    """Activate Transformers library hooking"""
     global _original_from_pretrained, _controller
 
     try:
@@ -29,16 +30,16 @@ def activate_transformers_hook(controller) -> None:
         @classmethod
         @wraps(_original_from_pretrained.__func__)
         def patched_from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
-            """모델 로드 후 자동으로 백엔드 준비"""
-            # 원본 메서드 호출
+            """Load model and wrap in proxy for backend routing"""
+            # Call original method
             model = _original_from_pretrained.__func__(
                 cls, pretrained_model_name_or_path, *args, **kwargs
             )
 
-            # 컨트롤러로 모델 준비
+            # Prepare model and wrap in proxy
             if _controller is not None:
                 logger.debug(f"Intercepted model load: {pretrained_model_name_or_path}")
-                model = _controller.prepare_model(model)
+                model = _controller.prepare_model_with_proxy(model)
 
             return model
 
@@ -50,7 +51,7 @@ def activate_transformers_hook(controller) -> None:
 
 
 def deactivate_transformers_hook() -> None:
-    """Transformers 라이브러리 후킹 비활성화"""
+    """Deactivate Transformers library hooking"""
     global _original_from_pretrained, _controller
 
     if _original_from_pretrained is None:
