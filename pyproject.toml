@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rm-abstract"
 version = "0.1.0"
-description = "Heterogeneous AI Accelerator Unified Compatibility Library - GPU/NPU Abstraction Layer"
+description = "LLM Heterogeneous Resource Orchestrator - GPU/NPU/PIM Meta-Serving Layer"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "RM Abstract Team"}
+    {name = "RM Abstract Team", email = "contact@rmabstract.dev"}
 ]
-keywords = ["llm", "npu", "gpu", "inference", "abstraction", "vllm", "rebellions", "furiosa"]
+keywords = ["llm", "gpu", "npu", "pim", "inference", "serving", "orchestration", "heterogeneous"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -28,34 +28,55 @@ classifiers = [
 
 dependencies = [
     "torch>=2.0.0",
-    "onnx>=1.14.0",
+    "numpy>=1.20.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
+# GPU backend
 gpu = [
-    "vllm>=0.4.0",
+    "vllm>=0.2.0",
+    "transformers>=4.30.0",
+    "accelerate>=0.20.0",
 ]
-npu-rebellions = [
+
+# NPU backends
+npu-rbln = [
     # Rebellions SDK requires separate installation
-    # pip install rebel (provided by Rebellions)
+    # Install from: https://rebellions.ai
 ]
 npu-furiosa = [
-    # Furiosa SDK requires separate installation
-    # pip install furiosa-sdk (provided by FuriosaAI)
+    # FuriosaAI SDK requires separate installation
+    # Install from: https://furiosa.ai
 ]
-transformers = [
-    "transformers>=4.30.0",
-]
+
+# Development tools
 dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "isort>=5.12.0",
+]
+
+# Documentation
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0",
+]
+
+# All optional dependencies
+all = [
+    "vllm>=0.2.0",
+    "transformers>=4.30.0",
+    "accelerate>=0.20.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "onnxsim>=0.4.0",
-]
-all = [
-    "rm-abstract[gpu,transformers,dev]",
 ]
 
 [project.urls]
@@ -64,40 +85,54 @@ Documentation = "https://github.com/gspark-etri/rm_abstract_layer#readme"
 Repository = "https://github.com/gspark-etri/rm_abstract_layer.git"
 Issues = "https://github.com/gspark-etri/rm_abstract_layer/issues"
 
+[project.scripts]
+rm-abstract = "rm_abstract.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-dir]
-"" = "src"
-
 [tool.black]
-line-length = 100
-target-version = ["py39", "py310", "py311", "py312"]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
-exclude = '''
+extend-exclude = '''
 /(
-    \.git
-    | \.mypy_cache
-    | \.venv
-    | build
-    | dist
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | build
+  | dist
 )/
 '''
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 target-version = "py39"
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
 ]
 ignore = [
     "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
 ]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -107,6 +142,23 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=rm_abstract --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/rm_abstract"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

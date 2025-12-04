@@ -52,12 +52,26 @@ coverage.xml
 
 # Environments
 .env
+.env.local
 .venv
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+dev-env/
+gpu-env/
+test-env/
+
+# uv
+.uv/
+uv.lock
+
+# Lock files (optional - commit if you want reproducible builds)
+# requirements.lock
+# requirements-dev.lock
+# requirements-gpu.lock
 
 # IDE
 .idea/

@@ -16,13 +16,35 @@ Complete guide for installing LLM Heterogeneous Resource Orchestrator.
 
 ## Quick Install
 
-### For CPU-only (No GPU/NPU)
+### Automated Setup (Recommended)
+
+Using **uv** (fastest):
+```bash
+# Linux/Mac
+bash scripts/setup-uv.sh
+
+# Windows PowerShell
+.\scripts\setup-uv.ps1
+```
+
+Using **venv** (standard):
+```bash
+# Linux/Mac
+bash scripts/setup-venv.sh
+
+# Windows PowerShell
+.\scripts\setup-venv.ps1
+```
+
+### Manual Install
+
+#### For CPU-only (No GPU/NPU)
 
 ```bash
 pip install rm-abstract
 ```
 
-### For GPU (NVIDIA CUDA)
+#### For GPU (NVIDIA CUDA)
 
 ```bash
 # Install PyTorch with CUDA first
@@ -32,13 +54,70 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install rm-abstract[gpu]
 ```
 
-### For Development
+#### For Development
 
 ```bash
-git clone https://github.com/yourusername/rm_abstract_layer.git
+git clone https://github.com/gspark-etri/rm_abstract_layer.git
 cd rm_abstract_layer
+
+# Using uv (recommended - 10-100x faster)
+uv venv
+source .venv/bin/activate  # Windows: .\.venv\Scripts\activate
+uv pip install -e ".[dev]"
+
+# Or using standard venv
+python -m venv venv
+source venv/bin/activate  # Windows: .\venv\Scripts\activate
 pip install -e ".[dev]"
 ```
+
+---
+
+## Environment Setup Methods
+
+### Method Comparison
+
+| Method | Speed | Lock Files | Best For |
+|--------|-------|------------|----------|
+| **uv** | ⚡⚡⚡ (10-100x faster) | ✅ Built-in | All users (recommended) |
+| **venv + pip** | ⚡ Standard | ⚠️ Manual | Traditional workflow |
+| **pip only** | ⚡ Fast | ❌ None | Quick tests only |
+
+### Using uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is an extremely fast Python package installer written in Rust.
+
+**Installation:**
+
+```bash
+# Linux/Mac
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows PowerShell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Setup:**
+
+```bash
+# Automated
+bash scripts/setup-uv.sh  # Linux/Mac
+.\scripts\setup-uv.ps1     # Windows
+
+# Manual
+uv venv
+source .venv/bin/activate  # Linux/Mac
+.\.venv\Scripts\activate   # Windows
+uv pip install -e ".[dev]"
+```
+
+**Benefits:**
+- ⚡ 10-100x faster than pip
+- 🔒 Built-in dependency resolution
+- 📦 Compatible with PyPI
+- 🎯 Reproducible builds with lock files
+
+See [ENVIRONMENT_SETUP.md](ENVIRONMENT_SETUP.md) for detailed guide.
 
 ---
 
