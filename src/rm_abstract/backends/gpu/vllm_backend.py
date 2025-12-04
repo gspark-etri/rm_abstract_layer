@@ -115,7 +115,7 @@ class VLLMBackend(Backend):
 
         Args:
             model: vLLM LLM instance
-            inputs: Prompt string, list, or token IDs
+            inputs: Prompt string, list, or token IDs (can be None if in kwargs)
             **kwargs: SamplingParams options (may include proxy metadata)
 
         Returns:
@@ -127,26 +127,34 @@ class VLLMBackend(Backend):
         proxy_method = kwargs.pop("_proxy_method", None)
         original_model = kwargs.pop("original_model", None)
 
+        # Handle do_sample parameter (HuggingFace style)
+        do_sample = kwargs.pop("do_sample", True)
+        temperature = kwargs.get("temperature", 0.7 if do_sample else 0.0)
+        if not do_sample:
+            temperature = 0.0
+
         # Configure SamplingParams
         sampling_params = SamplingParams(
-            temperature=kwargs.get("temperature", 0.7),
-            top_p=kwargs.get("top_p", 0.95),
+            temperature=temperature,
+            top_p=kwargs.get("top_p", 1.0 if not do_sample else 0.95),
             max_tokens=kwargs.get("max_tokens", kwargs.get("max_new_tokens", 256)),
         )
 
         # Process input - handle various input formats
-        prompts = self._prepare_inputs(inputs, original_model)
+        prompts = self._prepare_inputs(inputs, original_model, **kwargs)
 
         # Execute inference
         outputs = model.generate(prompts, sampling_params)
 
         # For generate() calls, return in a format compatible with HuggingFace
         if proxy_method == "generate":
-            return self._convert_to_hf_format(outputs, inputs)
+            return self._convert_to_hf_format(outputs, inputs, original_model, **kwargs)
 
         return outputs
 
-    def _prepare_inputs(self, inputs: Any, original_model: Any = None) -> list:
+    def _prepare_inputs(
+        self, inputs: Any, original_model: Any = None, **kwargs
+    ) -> list:
         """
         Prepare inputs for vLLM.
 
@@ -155,14 +163,22 @@ class VLLMBackend(Backend):
         - List of prompts
         - Token IDs (from tokenizer)
         - Dict with input_ids
+        - None (inputs in kwargs)
 
         Args:
-            inputs: Input data in various formats
+            inputs: Input data in various formats (can be None)
             original_model: Original HF model (for tokenizer access)
+            **kwargs: May contain input_ids if inputs is None
 
         Returns:
             List of prompt strings
         """
+        # If inputs is None, try to get from kwargs
+        if inputs is None:
+            inputs = kwargs.get("input_ids", kwargs.get("inputs", None))
+            if inputs is None:
+                raise ValueError("No inputs provided")
+
         # Already a string prompt
         if isinstance(inputs, str):
             return [inputs]
@@ -188,26 +204,16 @@ class VLLMBackend(Backend):
                 token_ids = token_ids.tolist()
 
             # Try to get tokenizer from original model or use a default
-            tokenizer = None
-            if original_model is not None:
-                # Try various ways to get tokenizer
-                if hasattr(original_model, "tokenizer"):
-                    tokenizer = original_model.tokenizer
-                elif hasattr(original_model, "config"):
-                    model_name = getattr(original_model.config, "name_or_path", None)
-                    if model_name:
-                        try:
-                            from transformers import AutoTokenizer
-
-                            tokenizer = AutoTokenizer.from_pretrained(model_name)
-                        except Exception:
-                            pass
+            tokenizer = self._get_tokenizer(original_model)
 
             if tokenizer is not None:
                 # Decode token IDs to text
                 if isinstance(token_ids[0], list):
                     # Batch of sequences
-                    return [tokenizer.decode(ids, skip_special_tokens=False) for ids in token_ids]
+                    return [
+                        tokenizer.decode(ids, skip_special_tokens=False)
+                        for ids in token_ids
+                    ]
                 else:
                     # Single sequence
                     return [tokenizer.decode(token_ids, skip_special_tokens=False)]
@@ -218,7 +224,42 @@ class VLLMBackend(Backend):
         # Fallback: convert to string
         return [str(inputs)]
 
-    def _convert_to_hf_format(self, vllm_outputs: Any, original_inputs: Any) -> Any:
+    def _get_tokenizer(self, original_model: Any = None):
+        """Get tokenizer from original model or model name."""
+        tokenizer = None
+
+        if original_model is not None:
+            # Try various ways to get tokenizer
+            if hasattr(original_model, "tokenizer"):
+                tokenizer = original_model.tokenizer
+            elif hasattr(original_model, "config"):
+                model_name = getattr(original_model.config, "name_or_path", None)
+                if model_name:
+                    try:
+                        from transformers import AutoTokenizer
+
+                        tokenizer = AutoTokenizer.from_pretrained(model_name)
+                    except Exception:
+                        pass
+
+        # Fallback to stored model name
+        if tokenizer is None and self._model_name:
+            try:
+                from transformers import AutoTokenizer
+
+                tokenizer = AutoTokenizer.from_pretrained(self._model_name)
+            except Exception:
+                pass
+
+        return tokenizer
+
+    def _convert_to_hf_format(
+        self,
+        vllm_outputs: Any,
+        original_inputs: Any,
+        original_model: Any = None,
+        **kwargs,
+    ) -> Any:
         """
         Convert vLLM outputs to HuggingFace-compatible format.
 
@@ -228,6 +269,8 @@ class VLLMBackend(Backend):
         Args:
             vllm_outputs: vLLM RequestOutput objects
             original_inputs: Original inputs (to detect expected format)
+            original_model: Original HF model (for tokenizer access)
+            **kwargs: Additional parameters
 
         Returns:
             Token IDs tensor if input was tokens, otherwise vLLM outputs
@@ -240,17 +283,37 @@ class VLLMBackend(Backend):
         try:
             import torch
 
-            # Extract generated text from vLLM outputs
-            generated_texts = []
+            # Get tokenizer
+            tokenizer = self._get_tokenizer(original_model)
+            if tokenizer is None:
+                return vllm_outputs
+
+            # Extract generated text from vLLM outputs (including prompt)
+            all_token_ids = []
             for output in vllm_outputs:
+                # vLLM output includes prompt + generated tokens
+                prompt_token_ids = output.prompt_token_ids
                 for completion in output.outputs:
-                    generated_texts.append(completion.text)
+                    # Combine prompt + generated token IDs
+                    generated_token_ids = list(prompt_token_ids) + list(
+                        completion.token_ids
+                    )
+                    all_token_ids.append(generated_token_ids)
 
-            # Try to tokenize
-            # For now, return vLLM outputs - proper tokenization needs tokenizer
-            return vllm_outputs
+            # Convert to tensor
+            if len(all_token_ids) == 1:
+                return torch.tensor([all_token_ids[0]])
+            else:
+                # Pad sequences to same length
+                max_len = max(len(ids) for ids in all_token_ids)
+                pad_token_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
+                padded = [
+                    ids + [pad_token_id] * (max_len - len(ids)) for ids in all_token_ids
+                ]
+                return torch.tensor(padded)
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to convert to HF format: {e}")
             return vllm_outputs
 
     def get_device_info(self) -> DeviceInfo:

@@ -15,7 +15,13 @@
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" run view 19848808195 --log-failed)",
       "Bash(pip install:*)",
       "Bash(python -m black:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nTranslate Korean to English and fix Black formatting\n\n## Changes\n\n### Documentation\n- README.md: Translated to English\n- DEVELOPMENT_PLAN.md: Translated to English\n\n### Configuration\n- pyproject.toml: Translated description and comments to English\n- .github/workflows/ci.yml: Translated comments to English\n- .github/workflows/hardware-test.yml: Translated comments to English\n\n### Source Code\n- All docstrings and comments translated to English\n- Applied Black formatting to all Python files\n- Fixed code style issues flagged by Black formatter\n\n### Files Updated\n- src/rm_abstract/__init__.py\n- src/rm_abstract/core/*.py\n- src/rm_abstract/backends/**/*.py\n- src/rm_abstract/hooks/*.py\n- src/rm_abstract/utils/*.py\n- examples/*.py\n- tests/**/*.py\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nTranslate Korean to English and fix Black formatting\n\n## Changes\n\n### Documentation\n- README.md: Translated to English\n- DEVELOPMENT_PLAN.md: Translated to English\n\n### Configuration\n- pyproject.toml: Translated description and comments to English\n- .github/workflows/ci.yml: Translated comments to English\n- .github/workflows/hardware-test.yml: Translated comments to English\n\n### Source Code\n- All docstrings and comments translated to English\n- Applied Black formatting to all Python files\n- Fixed code style issues flagged by Black formatter\n\n### Files Updated\n- src/rm_abstract/__init__.py\n- src/rm_abstract/core/*.py\n- src/rm_abstract/backends/**/*.py\n- src/rm_abstract/hooks/*.py\n- src/rm_abstract/utils/*.py\n- examples/*.py\n- tests/**/*.py\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(python -m pytest:*)",
+      "Bash(set PYTHONPATH=%cd%src)",
+      "Bash($env:PYTHONPATH=\"$pwd\\src\")",
+      "Bash(git commit:*)",
+      "Bash(python:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []

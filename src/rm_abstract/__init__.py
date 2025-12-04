@@ -5,11 +5,13 @@ An abstraction layer that enables existing GPU inference scripts to run on NPU/G
 without any code modification.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import os
 
 from .core.controller import DeviceFlowController
 from .core.config import Config
+from .core.resource_manager import ResourceManager
+from .core.plugin import PluginMetadata
 
 __version__ = "0.1.0"
 __all__ = [
@@ -18,10 +20,15 @@ __all__ = [
     "get_device_info",
     "get_controller",
     "get_available_backends",
+    "get_resource_manager",
+    "list_plugins",
 ]
 
-# Global controller instance
+# Global controller instance (legacy)
 _global_controller: Optional[DeviceFlowController] = None
+
+# Global resource manager instance (new plugin system)
+_global_resource_manager: Optional[ResourceManager] = None
 
 
 def init(
@@ -29,6 +36,7 @@ def init(
     cache_dir: Optional[str] = None,
     compile_options: Optional[Dict[str, Any]] = None,
     verbose: bool = True,
+    use_plugin_system: bool = False,
 ) -> DeviceFlowController:
     """
     Initialize RM Abstract Layer
@@ -43,6 +51,7 @@ def init(
         cache_dir: NPU compilation cache directory (default: ~/.rm_abstract/cache)
         compile_options: NPU compilation options
         verbose: Whether to print compilation progress
+        use_plugin_system: Use new plugin-based system (experimental)
 
     Returns:
         DeviceFlowController instance
@@ -54,14 +63,16 @@ def init(
         >>> from transformers import AutoModelForCausalLM
         >>> model = AutoModelForCausalLM.from_pretrained("gpt2")
     """
-    global _global_controller
-
-    # Register all backends
-    _register_backends()
+    global _global_controller, _global_resource_manager
 
     # Load settings from environment variables
     device = os.environ.get("RM_DEVICE", device)
     cache_dir = os.environ.get("RM_CACHE_DIR", cache_dir)
+    use_plugin_system = os.environ.get("RM_USE_PLUGINS", str(use_plugin_system)).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
     # Create Config
     config = Config(
@@ -71,12 +82,26 @@ def init(
         verbose=verbose,
     )
 
-    # Create and initialize Controller
-    _global_controller = DeviceFlowController(config)
-    _global_controller.activate_hooks()
+    if use_plugin_system:
+        # Use new plugin-based system
+        from .backends.auto_register import auto_register_backends
 
-    if verbose:
-        print(f"[RM Abstract] Initialized with device: {_global_controller.device_name}")
+        auto_register_backends()
+        _global_resource_manager = ResourceManager(config)
+        _global_resource_manager.initialize(auto_discover=True)
+
+        if verbose:
+            print(
+                f"[RM Abstract] Initialized with plugin: {_global_resource_manager.device_name}"
+            )
+    else:
+        # Use legacy Backend system
+        _register_backends()
+        _global_controller = DeviceFlowController(config)
+        _global_controller.activate_hooks()
+
+        if verbose:
+            print(f"[RM Abstract] Initialized with device: {_global_controller.device_name}")
 
     return _global_controller
 
@@ -133,8 +158,39 @@ def get_available_backends() -> Dict[str, bool]:
     return DeviceFlowController.get_available_backends()
 
 
+def get_resource_manager() -> Optional[ResourceManager]:
+    """
+    Get global resource manager instance (new plugin system)
+
+    Returns:
+        ResourceManager instance or None
+    """
+    return _global_resource_manager
+
+
+def list_plugins(available_only: bool = True) -> List[Dict[str, Any]]:
+    """
+    List all available plugins
+
+    Args:
+        available_only: Only show available plugins
+
+    Returns:
+        List of plugin information dictionaries
+    """
+    if _global_resource_manager is None:
+        # Initialize plugin registry
+        from .backends.auto_register import auto_register_backends
+
+        auto_register_backends()
+
+    from .backends.auto_register import list_registered_plugins
+
+    return list_registered_plugins()
+
+
 def _register_backends() -> None:
-    """Register all available backends"""
+    """Register all available backends (legacy system)"""
     # CPU backend (always available if torch is installed)
     try:
         from .backends.cpu.cpu_backend import CPUBackend

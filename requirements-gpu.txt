@@ -1,0 +1,9 @@
+# GPU backend dependencies
+
+# Core dependencies
+-r requirements.txt
+
+# GPU-specific
+vllm>=0.2.0
+transformers>=4.30.0
+accelerate>=0.20.0
