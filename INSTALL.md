@@ -22,12 +22,84 @@ RM Abstract Layer 설치 및 환경 설정 가이드입니다.
 
 ---
 
-## 🚀 빠른 설치
+## 🐍 가상환경 설정
 
-### 방법 1: pip 설치
+패키지 충돌을 방지하기 위해 **가상환경 사용을 강력히 권장**합니다.
+
+### 방법 1: uv (권장) ⚡
+
+[uv](https://github.com/astral-sh/uv)는 Rust로 작성된 초고속 Python 패키지 매니저입니다.
+
+**장점:**
+- pip보다 10-100배 빠른 설치 속도
+- 자동 Python 버전 관리
+- 빌트인 가상환경 지원
+- pip/venv 완벽 호환
 
 ```bash
-# 기본 설치
+# uv 설치
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 터미널 재시작 또는
+source ~/.bashrc  # 또는 ~/.zshrc
+
+# 가상환경 생성
+uv venv .venv
+
+# 활성화
+source .venv/bin/activate  # Linux/macOS
+.venv\Scripts\activate      # Windows
+
+# 패키지 설치 (초고속!)
+uv pip install -e ".[all]"
+```
+
+### 방법 2: venv (Python 기본)
+
+Python 3.3+ 내장 가상환경 도구입니다.
+
+```bash
+# 가상환경 생성
+python -m venv .venv
+
+# 활성화
+source .venv/bin/activate  # Linux/macOS
+.venv\Scripts\activate      # Windows
+
+# 패키지 설치
+pip install -e ".[all]"
+```
+
+### 방법 3: conda
+
+Anaconda/Miniconda 사용자를 위한 방법입니다.
+
+```bash
+# 환경 생성
+conda create -n rm_abstract python=3.10
+
+# 활성화
+conda activate rm_abstract
+
+# 패키지 설치
+pip install -e ".[all]"
+```
+
+### 가상환경 비활성화
+
+```bash
+deactivate  # venv, uv
+conda deactivate  # conda
+```
+
+---
+
+## 🚀 빠른 설치
+
+### 기본 설치
+
+```bash
+# 가상환경 활성화 후
 pip install -e .
 
 # GPU 지원
@@ -37,15 +109,13 @@ pip install -e ".[gpu]"
 pip install -e ".[all]"
 ```
 
-### 방법 2: uv 사용 (권장)
+### uv로 빠른 설치 (권장)
 
 ```bash
-# uv 설치
+# 한 번에 설정 (uv 설치 → 가상환경 → 패키지)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 가상환경 생성 및 설치
-uv venv .venv
-source .venv/bin/activate
+source ~/.bashrc
+uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[all]"
 ```
 
