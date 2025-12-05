@@ -1,0 +1,6 @@
+# GPU (vLLM) requirements
+-r base.txt
+
+# vLLM for high-performance GPU inference
+vllm>=0.4.0
+
