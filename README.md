@@ -507,56 +507,75 @@ cd rm_abstract_layer
 pip install -e ".[dev]"
 ```
 
-### System Information
+### System Validation (Recommended)
 
-Check available resources, backends, and serving engines:
+**Actually test** if components work, not just check if packages are installed:
 
 ```bash
-# CLI
-python -m rm_abstract.system_info
+# Full validation (includes vLLM inference test)
+python -m rm_abstract.system_validator
+
+# Quick mode (skip slow inference tests)
+python -m rm_abstract.system_validator --quick
 ```
 
 ```python
 # Python API
 import rm_abstract
 
-# Print formatted system info
-rm_abstract.print_system_info()
+# Run validation and print report
+rm_abstract.print_validation_report()
 
-# Get detailed info
-info = rm_abstract.get_system_info()
-print(f"GPUs: {len(info.gpus)}")
-print(f"NPUs: {len(info.npus)}")
-print(f"Available backends: {[b.name for b in info.backends if b.available]}")
+# Get validation results programmatically
+report = rm_abstract.validate_system()
+for result in report.results:
+    print(f"{result.name}: {result.status.value} - {result.message}")
 ```
 
 Output example:
 ```
 ======================================================================
-  RM Abstract Layer - System Information
+  RM Abstract Layer - System Validation
 ======================================================================
 
-🎮 GPUs (8 detected)
-   ✓ [0] NVIDIA GeForce RTX 3090 - 24 GB
+Running validation tests...
 
-🔮 NPUs (0 detected)
-   ✗ No NPUs detected
+  Testing GPU Available... ✓ (1474ms)
+  Testing CPU Inference... ✓ (5053ms)
+  Testing vLLM GPU Inference... ✓ (26037ms)
+  Testing Device Switching... ✓ (13ms)
+  Testing Triton Server... ⚠ (42ms)
+  Testing TorchServe... ⚠ (51ms)
+  Testing Rebellions NPU... ○ (0ms)
 
-⚙️  Backends
-   ✓ vLLM GPU Backend (0.12.0)
-   ✓ PyTorch CPU Backend
-   ✓ Rebellions ATOM NPU
+----------------------------------------------------------------------
+Summary:
+----------------------------------------------------------------------
+  Total Tests: 7
+  ✅ Passed:   4
+  ❌ Failed:   0
+  ⚠️  Warnings: 2
+  ⏭️  Skipped:  1
 
-🚀 Serving Engines
-   ✓ vLLM
-   ✓ Triton Inference Server
-   ✓ TorchServe
-
-📊 Summary
-   Hardware: 8 GPU(s), 0 NPU(s)
-   Backends: 3/4 available
-   Serving Engines: 3/3 available
+💡 Recommendations:
+  • GPU + vLLM ready for high-performance inference
+  • CPU inference available as fallback
+  • Triton client ready - start server with:
+      docker run --gpus=1 -p8000:8000 nvcr.io/nvidia/tritonserver tritonserver
 ======================================================================
+```
+
+### System Information (Static Check)
+
+Quick check of installed packages (doesn't verify they actually work):
+
+```bash
+python -m rm_abstract.system_info
+```
+
+```python
+import rm_abstract
+rm_abstract.print_system_info()
 ```
 
 ### Basic Usage
