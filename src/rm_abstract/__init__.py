@@ -13,6 +13,7 @@ from .core.config import Config
 from .core.resource_manager import ResourceManager
 from .core.plugin import PluginMetadata
 from .system_info import get_system_info, print_system_info, get_quick_status
+from .system_validator import validate_system, print_validation_report, get_working_components
 
 __version__ = "0.1.0"
 __all__ = [
@@ -23,10 +24,14 @@ __all__ = [
     "get_available_backends",
     "get_resource_manager",
     "list_plugins",
-    # System info
+    # System info (static check)
     "get_system_info",
     "print_system_info",
     "get_quick_status",
+    # System validation (actual tests)
+    "validate_system",
+    "print_validation_report",
+    "get_working_components",
 ]
 
 # Global controller instance (legacy)
