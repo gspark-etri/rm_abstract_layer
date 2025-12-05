@@ -325,49 +325,79 @@ def _test_device_switching() -> TestResult:
         )
 
 
-def _test_triton_client() -> TestResult:
-    """Test Triton client connectivity (if server is running)"""
+def _test_triton() -> TestResult:
+    """Test Triton functionality (config generation + optional server check)"""
     start = time.time()
     try:
         import tritonclient.http as httpclient
         
-        # Try to connect to default Triton server
-        client = httpclient.InferenceServerClient(url="localhost:8000", verbose=False)
-        
+        # First, test if we can create Triton model config
         try:
-            if client.is_server_live():
-                models = client.get_model_repository_index()
-                return TestResult(
-                    name="Triton Server",
-                    status=TestStatus.PASS,
-                    message=f"Server running, {len(models)} model(s)",
-                    duration_ms=(time.time() - start) * 1000,
-                    details={"models": len(models)},
+            from rm_abstract.serving import create_serving_engine, ServingConfig, ServingEngineType, DeviceTarget
+            import tempfile
+            import os
+            
+            with tempfile.TemporaryDirectory() as tmpdir:
+                config = ServingConfig(
+                    engine=ServingEngineType.TRITON,
+                    device=DeviceTarget.GPU,
+                    model_name="test_model",
                 )
-            else:
-                return TestResult(
-                    name="Triton Server",
-                    status=TestStatus.WARN,
-                    message="Client installed, server not running",
-                    duration_ms=(time.time() - start) * 1000,
-                )
+                engine = create_serving_engine(config)
+                engine.setup_model_repository(tmpdir)
+                engine.load_model("gpt2", triton_model_name="gpt2_test")
+                
+                # Check if config was created
+                config_path = os.path.join(tmpdir, "gpt2_test", "config.pbtxt")
+                if os.path.exists(config_path):
+                    config_created = True
+                else:
+                    config_created = False
+        except Exception as e:
+            config_created = False
+        
+        # Then check if server is running (optional)
+        server_running = False
+        try:
+            client = httpclient.InferenceServerClient(url="localhost:8000", verbose=False)
+            server_running = client.is_server_live()
         except:
+            pass
+        
+        if config_created and server_running:
             return TestResult(
-                name="Triton Server",
+                name="Triton",
+                status=TestStatus.PASS,
+                message="Config generation ✓, Server running ✓",
+                duration_ms=(time.time() - start) * 1000,
+                details={"config_created": True, "server_running": True},
+            )
+        elif config_created:
+            return TestResult(
+                name="Triton",
+                status=TestStatus.PASS,
+                message="Config generation ✓ (server not running)",
+                duration_ms=(time.time() - start) * 1000,
+                details={"config_created": True, "server_running": False},
+            )
+        else:
+            return TestResult(
+                name="Triton",
                 status=TestStatus.WARN,
-                message="Client installed, server not reachable (localhost:8000)",
+                message="Client installed, config generation failed",
                 duration_ms=(time.time() - start) * 1000,
             )
+            
     except ImportError:
         return TestResult(
-            name="Triton Server",
+            name="Triton",
             status=TestStatus.SKIP,
             message="tritonclient not installed",
             duration_ms=(time.time() - start) * 1000,
         )
     except Exception as e:
         return TestResult(
-            name="Triton Server",
+            name="Triton",
             status=TestStatus.FAIL,
             message=str(e)[:100],
             duration_ms=(time.time() - start) * 1000,
@@ -375,7 +405,7 @@ def _test_triton_client() -> TestResult:
 
 
 def _test_torchserve() -> TestResult:
-    """Test TorchServe availability"""
+    """Test TorchServe functionality (.mar creation + optional server check)"""
     start = time.time()
     try:
         import subprocess
@@ -387,34 +417,68 @@ def _test_torchserve() -> TestResult:
             timeout=5,
         )
         
-        if result.returncode == 0:
-            # Check if torchserve is running
-            try:
-                import requests
-                response = requests.get("http://localhost:8080/ping", timeout=2)
-                if response.status_code == 200:
-                    return TestResult(
-                        name="TorchServe",
-                        status=TestStatus.PASS,
-                        message="TorchServe running",
-                        duration_ms=(time.time() - start) * 1000,
-                    )
-            except:
-                pass
-            
-            return TestResult(
-                name="TorchServe",
-                status=TestStatus.WARN,
-                message="torch-model-archiver ready, server not running",
-                duration_ms=(time.time() - start) * 1000,
-            )
-        else:
+        if result.returncode != 0:
             return TestResult(
                 name="TorchServe",
                 status=TestStatus.FAIL,
                 message="torch-model-archiver not working",
                 duration_ms=(time.time() - start) * 1000,
             )
+        
+        # Test .mar file creation
+        mar_created = False
+        try:
+            from rm_abstract.serving import create_serving_engine, ServingConfig, ServingEngineType, DeviceTarget
+            import tempfile
+            import os
+            
+            with tempfile.TemporaryDirectory() as tmpdir:
+                config = ServingConfig(
+                    engine=ServingEngineType.TORCHSERVE,
+                    device=DeviceTarget.GPU,
+                    model_name="test_model",
+                )
+                engine = create_serving_engine(config)
+                engine._model_store = tmpdir
+                
+                mar_path = engine.create_model_archive("gpt2", archive_name="gpt2_test")
+                mar_created = mar_path and os.path.exists(mar_path)
+        except Exception as e:
+            mar_created = False
+        
+        # Check if server is running (optional)
+        server_running = False
+        try:
+            import urllib.request
+            response = urllib.request.urlopen("http://localhost:8080/ping", timeout=2)
+            server_running = response.status == 200
+        except:
+            pass
+        
+        if mar_created and server_running:
+            return TestResult(
+                name="TorchServe",
+                status=TestStatus.PASS,
+                message=".mar creation ✓, Server running ✓",
+                duration_ms=(time.time() - start) * 1000,
+                details={"mar_created": True, "server_running": True},
+            )
+        elif mar_created:
+            return TestResult(
+                name="TorchServe",
+                status=TestStatus.PASS,
+                message=".mar creation ✓ (server not running, needs Java)",
+                duration_ms=(time.time() - start) * 1000,
+                details={"mar_created": True, "server_running": False},
+            )
+        else:
+            return TestResult(
+                name="TorchServe",
+                status=TestStatus.WARN,
+                message="torch-model-archiver ready, .mar creation failed",
+                duration_ms=(time.time() - start) * 1000,
+            )
+            
     except FileNotFoundError:
         return TestResult(
             name="TorchServe",
@@ -511,7 +575,7 @@ def validate_system(
         ])
     
     tests.extend([
-        ("Triton Server", _test_triton_client),
+        ("Triton", _test_triton),
         ("TorchServe", _test_torchserve),
         ("Rebellions NPU", _test_rbln_npu),
     ])
@@ -601,14 +665,21 @@ def print_validation_report(report: Optional[ValidationReport] = None, run_infer
     if cpu_result and cpu_result.status == TestStatus.PASS:
         print("  • CPU inference available as fallback")
     
-    triton_result = next((r for r in report.results if r.name == "Triton Server"), None)
-    if triton_result and triton_result.status == TestStatus.WARN:
-        print("  • Triton client ready - start server with:")
-        print("      docker run --gpus=1 -p8000:8000 nvcr.io/nvidia/tritonserver tritonserver")
+    triton_result = next((r for r in report.results if r.name == "Triton"), None)
+    if triton_result and triton_result.status == TestStatus.PASS:
+        if triton_result.details.get("server_running"):
+            print("  • Triton server ready for multi-model serving")
+        else:
+            print("  • Triton config generation works - to start server:")
+            print("      docker run --gpus=1 -p8000:8000 -v /models:/models nvcr.io/nvidia/tritonserver tritonserver")
     
     torchserve_result = next((r for r in report.results if r.name == "TorchServe"), None)
-    if torchserve_result and torchserve_result.status == TestStatus.WARN:
-        print("  • TorchServe ready - start with: torchserve --start")
+    if torchserve_result and torchserve_result.status == TestStatus.PASS:
+        if torchserve_result.details.get("server_running"):
+            print("  • TorchServe server ready for model serving")
+        else:
+            print("  • TorchServe .mar creation works - to start server (requires Java):")
+            print("      torchserve --start --model-store ~/.rm_abstract/torchserve_models")
     
     rbln_result = next((r for r in report.results if r.name == "Rebellions NPU"), None)
     if rbln_result and rbln_result.status == TestStatus.SKIP:
