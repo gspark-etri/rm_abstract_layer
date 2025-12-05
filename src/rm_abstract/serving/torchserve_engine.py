@@ -30,23 +30,28 @@ class TorchServeEngine(ServingEngine):
     - A/B testing
     - Metrics and logging
     - RESTful API
+    - **Auto server management**
     
     Example:
-        config = ServingConfig(
-            engine=ServingEngineType.TORCHSERVE,
-            device=DeviceTarget.GPU,
-            model_name="llama2",
-            port=8080,
-        )
+        # 자동 서버 관리 (context manager)
+        with TorchServeEngine(config) as engine:
+            engine.load_model("gpt2")
+            output = engine.infer("Hello")
+        # 서버 자동 종료
+        
+        # 또는 수동 관리
         engine = TorchServeEngine(config)
-        engine.create_model_archive("meta-llama/Llama-2-7b-hf")
-        engine.start_server()
+        engine.load_model("gpt2")
+        engine.start_server()  # 서버 자동 시작
+        output = engine.infer("Hello")
+        engine.stop_server()   # 서버 종료
     """
     
     def __init__(self, config: ServingConfig):
         super().__init__(config)
         self._model_store: Optional[str] = None
         self._mar_file: Optional[str] = None
+        self._loaded_model: Optional[str] = None
     
     @property
     def name(self) -> str:
@@ -334,24 +339,37 @@ rbln_device_id={self.config.device_id}
         return str(config_path)
     
     def start_server(self) -> None:
-        """Start TorchServe server"""
+        """Start TorchServe server (자동 관리)"""
         if self._is_running:
             logger.warning("Server already running")
             return
         
         if self._model_store is None:
-            raise RuntimeError("Model store not set")
+            self.setup_model_store(
+                os.path.expanduser("~/.rm_abstract/torchserve_models")
+            )
         
         import subprocess
         import shutil
         
+        # Check Java (required for TorchServe)
+        java_cmd = shutil.which("java")
+        if java_cmd is None:
+            raise RuntimeError(
+                "Java not found. TorchServe requires Java 11+.\n"
+                "Install: sudo apt install openjdk-11-jdk"
+            )
+        
         # Check if torchserve is available
         torchserve_cmd = shutil.which("torchserve")
-        
         if torchserve_cmd is None:
             raise RuntimeError(
-                "torchserve not found. Install with: pip install torchserve torch-model-archiver"
+                "torchserve not found. Install with:\n"
+                "  pip install torchserve torch-model-archiver"
             )
+        
+        # Stop existing server first
+        subprocess.run([torchserve_cmd, "--stop"], capture_output=True)
         
         # Create config
         config_path = self.create_config()
@@ -374,7 +392,28 @@ rbln_device_id={self.config.device_id}
             raise RuntimeError(f"TorchServe start failed: {result.stderr}")
         
         self._is_running = True
+        self._wait_for_server()
         logger.info(f"TorchServe started on port {self.config.port}")
+    
+    def _wait_for_server(self, timeout: int = 60) -> None:
+        """서버가 준비될 때까지 대기"""
+        import time
+        import urllib.request
+        
+        start = time.time()
+        url = f"http://localhost:{self.config.port}/ping"
+        
+        while time.time() - start < timeout:
+            try:
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    if response.status == 200:
+                        logger.info("TorchServe server is ready")
+                        return
+            except:
+                pass
+            time.sleep(1)
+        
+        logger.warning("TorchServe server may not be fully ready yet")
     
     def stop_server(self) -> None:
         """Stop TorchServe server"""

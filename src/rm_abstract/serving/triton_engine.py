@@ -29,24 +29,32 @@ class TritonServingEngine(ServingEngine):
     - Dynamic batching
     - Model versioning
     - Metrics and monitoring
+    - **Auto server management via Docker**
     
     Example:
-        config = ServingConfig(
-            engine=ServingEngineType.TRITON,
-            device=DeviceTarget.GPU,
-            model_name="llama2",
-            port=8000,
-        )
+        # 자동 서버 관리 (context manager)
+        with TritonServingEngine(config) as engine:
+            engine.load_model("gpt2")
+            output = engine.infer("Hello")
+        # 서버 자동 종료
+        
+        # 또는 수동 관리
         engine = TritonServingEngine(config)
-        engine.setup_model_repository("./model_repo")
-        engine.load_model("meta-llama/Llama-2-7b-hf")
-        engine.start_server()
+        engine.load_model("gpt2")
+        engine.start_server()  # Docker 자동 시작
+        output = engine.infer("Hello")
+        engine.stop_server()   # Docker 자동 종료
     """
+    
+    DOCKER_IMAGE = "nvcr.io/nvidia/tritonserver:24.01-py3"
+    CONTAINER_NAME = "rm_abstract_triton"
     
     def __init__(self, config: ServingConfig):
         super().__init__(config)
         self._model_repository: Optional[str] = None
         self._client = None
+        self._container_id: Optional[str] = None
+        self._loaded_model: Optional[str] = None
     
     @property
     def name(self) -> str:
@@ -323,57 +331,145 @@ class TritonPythonModel:
     
     def start_server(self) -> None:
         """
-        Start Triton Inference Server
+        Start Triton Inference Server (자동 Docker 관리)
         
-        Note: In production, Triton server is typically run via Docker.
-        This starts it via command line if tritonserver is installed.
+        1. 로컬 tritonserver가 있으면 직접 실행
+        2. 없으면 Docker 컨테이너로 자동 실행
         """
         if self._is_running:
             logger.warning("Server already running")
             return
         
         if self._model_repository is None:
-            raise RuntimeError("Model repository not set")
+            self.setup_model_repository("/tmp/triton_models")
         
         import subprocess
         import shutil
+        import time
         
-        # Check if tritonserver is available
+        # 방법 1: 로컬 tritonserver
         triton_cmd = shutil.which("tritonserver")
-        
         if triton_cmd:
-            cmd = [
-                triton_cmd,
-                f"--model-repository={self._model_repository}",
-                f"--http-port={self.config.port}",
-                f"--grpc-port={self.config.port + 1}",
-                f"--metrics-port={self.config.port + 2}",
-            ]
-            
-            logger.info(f"Starting Triton server: {' '.join(cmd)}")
-            
-            self._server = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            self._is_running = True
-            logger.info(f"Triton server started on port {self.config.port}")
+            return self._start_local_server(triton_cmd)
+        
+        # 방법 2: Docker
+        docker_cmd = shutil.which("docker")
+        if docker_cmd:
+            return self._start_docker_server()
+        
+        raise RuntimeError(
+            "Neither tritonserver nor Docker found. "
+            "Install Docker to use Triton: curl -fsSL https://get.docker.com | sh"
+        )
+    
+    def _start_local_server(self, triton_cmd: str) -> None:
+        """로컬 tritonserver 실행"""
+        import subprocess
+        
+        cmd = [
+            triton_cmd,
+            f"--model-repository={self._model_repository}",
+            f"--http-port={self.config.port}",
+            f"--grpc-port={self.config.port + 1}",
+            f"--metrics-port={self.config.port + 2}",
+        ]
+        
+        logger.info(f"Starting local Triton server: {' '.join(cmd)}")
+        
+        self._server = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self._is_running = True
+        self._wait_for_server()
+        logger.info(f"Triton server started on port {self.config.port}")
+    
+    def _start_docker_server(self) -> None:
+        """Docker 컨테이너로 Triton 서버 시작"""
+        import subprocess
+        import time
+        
+        # 기존 컨테이너 정리
+        subprocess.run(
+            ["docker", "rm", "-f", self.CONTAINER_NAME],
+            capture_output=True
+        )
+        
+        # GPU 옵션
+        gpu_opt = []
+        if self.config.device == DeviceTarget.GPU:
+            gpu_opt = ["--gpus", f'"device={self.config.device_id}"']
+        
+        cmd = [
+            "docker", "run", "-d",
+            "--name", self.CONTAINER_NAME,
+            *gpu_opt,
+            "-p", f"{self.config.port}:8000",
+            "-p", f"{self.config.port + 1}:8001",
+            "-p", f"{self.config.port + 2}:8002",
+            "-v", f"{self._model_repository}:/models",
+            self.DOCKER_IMAGE,
+            "tritonserver",
+            "--model-repository=/models",
+        ]
+        
+        # GPU 옵션이 있으면 쉘로 실행
+        if gpu_opt:
+            cmd_str = " ".join(cmd)
+            logger.info(f"Starting Triton Docker: {cmd_str}")
+            result = subprocess.run(cmd_str, shell=True, capture_output=True, text=True)
         else:
-            logger.warning(
-                "tritonserver not found. Please run Triton via Docker:\n"
-                f"docker run --gpus=1 --rm -p{self.config.port}:8000 "
-                f"-v {self._model_repository}:/models "
-                "nvcr.io/nvidia/tritonserver:latest tritonserver --model-repository=/models"
-            )
-            raise RuntimeError("tritonserver not installed")
+            cmd = [c for c in cmd if c]  # 빈 문자열 제거
+            logger.info(f"Starting Triton Docker: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to start Docker: {result.stderr}")
+        
+        self._container_id = result.stdout.strip()
+        self._is_running = True
+        self._wait_for_server()
+        logger.info(f"Triton Docker started: {self._container_id[:12]}")
+    
+    def _wait_for_server(self, timeout: int = 60) -> None:
+        """서버가 준비될 때까지 대기"""
+        import time
+        import urllib.request
+        
+        start = time.time()
+        url = f"http://localhost:{self.config.port}/v2/health/ready"
+        
+        while time.time() - start < timeout:
+            try:
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    if response.status == 200:
+                        logger.info("Triton server is ready")
+                        return
+            except:
+                pass
+            time.sleep(1)
+        
+        logger.warning("Triton server may not be fully ready yet")
     
     def stop_server(self) -> None:
-        """Stop Triton server"""
+        """Stop Triton server (로컬 또는 Docker)"""
+        import subprocess
+        
+        # 로컬 프로세스 종료
         if self._server is not None:
             self._server.terminate()
             self._server.wait()
             self._server = None
+        
+        # Docker 컨테이너 종료
+        if self._container_id:
+            subprocess.run(
+                ["docker", "rm", "-f", self.CONTAINER_NAME],
+                capture_output=True
+            )
+            self._container_id = None
+        
         self._is_running = False
         logger.info("Triton server stopped")
     
