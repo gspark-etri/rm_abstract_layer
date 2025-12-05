@@ -107,6 +107,47 @@ def _test_gpu_available() -> TestResult:
         )
 
 
+def _find_free_gpu() -> Optional[int]:
+    """Find a GPU with enough free memory"""
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return None
+        
+        best_gpu = None
+        best_free_mem = 0
+        
+        for i in range(torch.cuda.device_count()):
+            try:
+                # Get memory info using nvidia-smi for accurate free memory
+                import subprocess
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits", f"--id={i}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    free_mem = int(result.stdout.strip())
+                    if free_mem > best_free_mem:
+                        best_free_mem = free_mem
+                        best_gpu = i
+            except:
+                # Fallback: use torch to get memory info
+                torch.cuda.set_device(i)
+                free_mem = torch.cuda.mem_get_info(i)[0] / (1024**2)  # MB
+                if free_mem > best_free_mem:
+                    best_free_mem = free_mem
+                    best_gpu = i
+        
+        # Need at least 2GB free for gpt2
+        if best_free_mem > 2000:
+            return best_gpu
+        return None
+    except:
+        return None
+
+
 def _test_vllm_gpu_inference() -> TestResult:
     """Test actual vLLM inference on GPU"""
     start = time.time()
@@ -120,33 +161,57 @@ def _test_vllm_gpu_inference() -> TestResult:
                 duration_ms=(time.time() - start) * 1000,
             )
         
+        # Find GPU with enough free memory
+        free_gpu = _find_free_gpu()
+        if free_gpu is None:
+            return TestResult(
+                name="vLLM GPU Inference",
+                status=TestStatus.WARN,
+                message="All GPUs have insufficient memory (<2GB free)",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        
         from vllm import LLM, SamplingParams
+        import os
         
-        # Load a tiny model for testing
-        llm = LLM(
-            model="gpt2",
-            trust_remote_code=True,
-            gpu_memory_utilization=0.3,  # Use less memory for test
-            max_model_len=128,
-        )
+        # Set to use the free GPU
+        original_cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(free_gpu)
         
-        # Run inference
-        sampling_params = SamplingParams(max_tokens=10, temperature=0.0)
-        outputs = llm.generate(["Hello"], sampling_params)
-        
-        generated_text = outputs[0].outputs[0].text
-        
-        # Cleanup
-        del llm
-        torch.cuda.empty_cache()
-        
-        return TestResult(
-            name="vLLM GPU Inference",
-            status=TestStatus.PASS,
-            message=f"Generated: '{generated_text[:30]}...'",
-            duration_ms=(time.time() - start) * 1000,
-            details={"model": "gpt2", "output_length": len(generated_text)},
-        )
+        try:
+            # Load a tiny model for testing with minimal memory
+            llm = LLM(
+                model="gpt2",
+                trust_remote_code=True,
+                gpu_memory_utilization=0.15,  # Use minimal memory for test
+                max_model_len=128,
+                enforce_eager=True,  # Disable CUDA graphs to save memory
+            )
+            
+            # Run inference
+            sampling_params = SamplingParams(max_tokens=10, temperature=0.0)
+            outputs = llm.generate(["Hello"], sampling_params)
+            
+            generated_text = outputs[0].outputs[0].text
+            
+            # Cleanup
+            del llm
+            torch.cuda.empty_cache()
+            
+            return TestResult(
+                name="vLLM GPU Inference",
+                status=TestStatus.PASS,
+                message=f"Generated: '{generated_text[:30]}...' (GPU:{free_gpu})",
+                duration_ms=(time.time() - start) * 1000,
+                details={"model": "gpt2", "output_length": len(generated_text), "gpu_id": free_gpu},
+            )
+        finally:
+            # Restore original CUDA_VISIBLE_DEVICES
+            if original_cuda_visible:
+                os.environ["CUDA_VISIBLE_DEVICES"] = original_cuda_visible
+            else:
+                os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+                
     except ImportError as e:
         return TestResult(
             name="vLLM GPU Inference",
@@ -155,10 +220,18 @@ def _test_vllm_gpu_inference() -> TestResult:
             duration_ms=(time.time() - start) * 1000,
         )
     except Exception as e:
+        error_msg = str(e)
+        if "memory" in error_msg.lower():
+            return TestResult(
+                name="vLLM GPU Inference",
+                status=TestStatus.WARN,
+                message="GPU memory insufficient - try freeing GPU memory",
+                duration_ms=(time.time() - start) * 1000,
+            )
         return TestResult(
             name="vLLM GPU Inference",
             status=TestStatus.FAIL,
-            message=str(e)[:100],
+            message=error_msg[:100],
             duration_ms=(time.time() - start) * 1000,
         )
 
