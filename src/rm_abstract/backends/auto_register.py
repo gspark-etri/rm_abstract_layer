@@ -61,19 +61,42 @@ def auto_register_backends() -> None:
     except ImportError as e:
         logger.debug(f"CPU plugin not available: {e}")
 
-    # Register Rebellions NPU backend
+    # Register Rebellions NPU backend (supports vLLM-RBLN and Optimum-RBLN modes)
     try:
         from .npu.plugins.rebellions import RBLNBackend
+        
+        # Check if any RBLN SDK is available
+        rbln_available = False
+        requires = []
+        
+        # Check vLLM-RBLN
+        try:
+            import vllm
+            rbln_available = True
+            requires.append("vllm")
+        except ImportError:
+            pass
+        
+        # Check Optimum-RBLN
+        try:
+            from optimum.rbln import RBLNModelForCausalLM
+            rbln_available = True
+            requires.append("optimum-rbln")
+        except ImportError:
+            pass
+        
+        if not rbln_available:
+            raise ImportError("Neither vllm-rbln nor optimum-rbln available")
 
         rbln_plugin = create_backend_plugin(
             backend_class=RBLNBackend,
             name="rbln",
             display_name="Rebellions ATOM NPU",
-            version="1.0.0",
+            version="2.0.0",
             vendor="Rebellions",
             priority=PluginPriority.HIGHEST,
-            requires=["rbln"],
-            description="Rebellions ATOM NPU backend with on-device compilation",
+            requires=requires,
+            description="Rebellions ATOM NPU backend (supports vLLM-RBLN and Optimum-RBLN modes)",
             device_types=["npu"],
         )
         registry.register(rbln_plugin)
