@@ -1,345 +1,245 @@
-# Quick Start Guide
+# 빠른 시작 가이드
 
-Get started with LLM Heterogeneous Resource Orchestrator in 5 minutes!
-
----
-
-## 1. Installation (30 seconds)
-
-### Basic Installation
-
-```bash
-pip install rm-abstract
-```
-
-### With GPU Support
-
-```bash
-# Install PyTorch with CUDA first
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-
-# Install rm-abstract with GPU support
-pip install rm-abstract[gpu]
-```
-
-### From Source (for development)
-
-```bash
-git clone https://github.com/yourusername/rm_abstract_layer.git
-cd rm_abstract_layer
-pip install -e .
-```
+예제 중심으로 RM Abstract Layer 사용법을 알아봅니다.
 
 ---
 
-## 2. Verify Installation (30 seconds)
+## 🎯 5분 만에 시작하기
 
-### Using CLI
+### 1. 설치
 
 ```bash
-# Verify installation
-python -m rm_abstract.verify
-
-# Show system info
-python -m rm_abstract.cli info
-
-# List available plugins
-python -m rm_abstract.cli list-plugins
+pip install -e ".[gpu]"
 ```
 
-### Using Python
+### 2. 시스템 확인
+
+```bash
+python -m rm_abstract.system_validator --quick
+```
+
+### 3. 첫 번째 예제
 
 ```python
 import rm_abstract
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# List available plugins
-plugins = rm_abstract.list_plugins()
-print(f"Available plugins: {list(plugins.keys())}")
+# 초기화
+rm_abstract.init(device="auto")
+
+# 모델 로드 및 추론
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+
+inputs = tokenizer("Hello, I am", return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=30)
+print(tokenizer.decode(outputs[0]))
 ```
 
 ---
 
-## 3. First Program (1 minute)
+## 📚 예제 모음
 
-Create `hello_orchestrator.py`:
-
-```python
-import rm_abstract
-
-# Initialize with auto-selection
-rm_abstract.init(device="auto", use_plugin_system=True)
-
-print("RM Abstract initialized successfully!")
-print("Using plugin:", rm_abstract.get_resource_manager().device_name)
-```
-
-Run it:
-
-```bash
-python hello_orchestrator.py
-```
-
-Expected output:
-```
-[RM Abstract] Initialized with plugin: cpu
-RM Abstract initialized successfully!
-Using plugin: cpu
-```
-
----
-
-## 4. Using Different Backends (2 minutes)
-
-### CPU Backend (Always Available)
+### 예제 1: GPU/vLLM 사용
 
 ```python
 import rm_abstract
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Use CPU backend
-rm_abstract.init(device="cpu", use_plugin_system=True)
+# GPU 초기화
+rm_abstract.init(device="gpu:0", verbose=True)
 
-manager = rm_abstract.get_resource_manager()
-print(f"Using: {manager.device_name}")
-```
+# 모델 로드
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2")
 
-### GPU Backend (if available)
-
-```python
-import rm_abstract
-
-# Use GPU backend
-rm_abstract.init(device="gpu:0", use_plugin_system=True)
-
-# Check capabilities
-manager = rm_abstract.get_resource_manager()
-caps = manager.get_capabilities()
-print(f"Max batch size: {caps.get('max_batch_size')}")
-```
-
-### Auto Selection
-
-```python
-import rm_abstract
-
-# Let orchestrator choose best backend
-rm_abstract.init(device="auto", use_plugin_system=True)
-```
-
----
-
-## 5. Migration Example (2 minutes)
-
-### Original GPU Code
-
-```python
-# Original GPU-only code
-device = "cuda:0"
-model = load_model().to(device)
-
-def inference(prompt):
-    return model.generate(prompt)
-```
-
-### Refactored for Orchestrator
-
-```python
-from rm_abstract.examples.gpu_to_npu_migration import (
-    DeviceRuntime, GpuTorchRuntime, NpuRuntime, LLMApplication
+# 텍스트 생성
+prompt = "The future of AI is"
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(
+    **inputs,
+    max_new_tokens=50,
+    temperature=0.7,
+    do_sample=True,
 )
 
-# Choose runtime
-runtime = GpuTorchRuntime(device="cuda:0")  # Or NpuRuntime() for NPU
-
-# Application code (unchanged!)
-app = LLMApplication(runtime=runtime)
-app.setup("/path/to/model")
-result = app.process_request("Hello, world!")
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
----
-
-## 6. Run Examples (1 minute)
-
-### Using CLI
-
-```bash
-# Run simple test
-python -m rm_abstract.cli example simple
-
-# Run migration demo
-python -m rm_abstract.cli example migration
-
-# Run full plugin demo
-python -m rm_abstract.cli example plugin
-```
-
-### Direct Execution
-
-```bash
-# Simple plugin test
-python examples/simple_plugin_test.py
-
-# GPU to NPU migration
-python examples/gpu_to_npu_migration.py
-
-# Full plugin system demo
-python examples/plugin_system_demo.py
-```
-
----
-
-## 7. Create Custom Plugin (5 minutes)
+### 예제 2: CPU로 전환
 
 ```python
-from rm_abstract.core.plugin import Plugin, PluginMetadata, PluginPriority
-
-class MyAcceleratorPlugin(Plugin):
-    @classmethod
-    def metadata(cls) -> PluginMetadata:
-        return PluginMetadata(
-            name="my_accel",
-            display_name="My Custom Accelerator",
-            version="1.0.0",
-            vendor="MyCompany",
-            priority=PluginPriority.HIGH,
-            device_types=["custom"],
-            description="My custom accelerator backend"
-        )
-
-    def is_available(self) -> bool:
-        # Check if hardware is available
-        return True
-
-    def initialize(self) -> None:
-        print("Initializing my accelerator...")
-        self._initialized = True
-
-    def prepare_resource(self, resource, config=None):
-        print(f"Preparing resource: {resource}")
-        return resource
-
-    def execute(self, resource, inputs, **kwargs):
-        print(f"Executing on my accelerator: {inputs}")
-        return f"Result from my accelerator: {inputs}"
-
-    def cleanup(self) -> None:
-        print("Cleaning up...")
-        self._initialized = False
-
-# Register and use
-from rm_abstract.core.plugin import get_registry
-
-get_registry().register(MyAcceleratorPlugin)
-
 import rm_abstract
-rm_abstract.init(device="my_accel", use_plugin_system=True)
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# GPU로 시작
+rm_abstract.init(device="gpu:0")
+print(f"현재 디바이스: {rm_abstract.get_controller().device_name}")
+
+# CPU로 전환
+rm_abstract.switch_device("cpu")
+print(f"전환 후: {rm_abstract.get_controller().device_name}")
+
+# CPU에서 추론
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+
+inputs = tokenizer("Hello", return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=20)
+print(tokenizer.decode(outputs[0]))
+```
+
+### 예제 3: 시스템 정보 확인
+
+```python
+import rm_abstract
+
+# 전체 시스템 정보
+rm_abstract.print_system_info()
+
+# 상세 정보 가져오기
+info = rm_abstract.get_system_info()
+print(f"GPU 개수: {len(info.gpus)}")
+print(f"NPU 개수: {len(info.npus)}")
+
+# 사용 가능한 백엔드
+backends = rm_abstract.get_available_backends()
+for name, available in backends.items():
+    status = "✓" if available else "✗"
+    print(f"  {status} {name}")
+```
+
+### 예제 4: REST API 서버
+
+```python
+# 서버 시작 (별도 터미널)
+# python -m rm_abstract.api --port 8000
+
+import requests
+
+# 텍스트 생성
+response = requests.post(
+    "http://localhost:8000/v1/completions",
+    json={
+        "model": "gpt2",
+        "prompt": "Hello, I am",
+        "max_tokens": 30,
+    }
+)
+print(response.json()["choices"][0]["text"])
+
+# 채팅
+response = requests.post(
+    "http://localhost:8000/v1/chat/completions",
+    json={
+        "model": "gpt2",
+        "messages": [
+            {"role": "user", "content": "What is AI?"}
+        ],
+        "max_tokens": 50,
+    }
+)
+print(response.json()["choices"][0]["message"]["content"])
+```
+
+### 예제 5: 서빙 엔진 사용
+
+```python
+from rm_abstract.serving import (
+    create_serving_engine,
+    ServingConfig,
+    ServingEngineType,
+    DeviceTarget,
+)
+
+# vLLM 엔진
+config = ServingConfig(
+    engine=ServingEngineType.VLLM,
+    device=DeviceTarget.GPU,
+)
+engine = create_serving_engine(config)
+engine.load_model("gpt2")
+output = engine.infer("Hello, I am", max_tokens=30)
+print(output)
 ```
 
 ---
 
-## 8. Environment Variables
+## 🔧 디바이스 옵션
 
-Set environment variables for configuration:
+```python
+import rm_abstract
+
+# 자동 선택 (NPU > GPU > CPU)
+rm_abstract.init(device="auto")
+
+# 특정 GPU
+rm_abstract.init(device="gpu:0")
+rm_abstract.init(device="gpu:1")
+
+# CPU
+rm_abstract.init(device="cpu")
+
+# Rebellions NPU
+rm_abstract.init(device="rbln:0")
+```
+
+---
+
+## 📁 예제 파일
 
 ```bash
-# Linux/Mac
-export RM_DEVICE="auto"
-export RM_USE_PLUGINS="true"
-export RM_CACHE_DIR="/path/to/cache"
-
-# Windows PowerShell
-$env:RM_DEVICE="auto"
-$env:RM_USE_PLUGINS="true"
-$env:RM_CACHE_DIR="C:\cache"
-
-# Then use without arguments
-python -c "import rm_abstract; rm_abstract.init()"
+# 예제 실행
+python examples/gpu_vllm_usage.py
+python examples/serving_engines_demo.py
 ```
+
+| 파일 | 설명 |
+|------|------|
+| `gpu_vllm_usage.py` | GPU/vLLM 사용 및 디바이스 스위칭 |
+| `serving_engines_demo.py` | vLLM, Triton, TorchServe 비교 |
 
 ---
 
-## Common Commands Cheat Sheet
+## ❓ 자주 묻는 질문
+
+### Q: 어떤 디바이스가 사용되나요?
+
+```python
+import rm_abstract
+
+rm_abstract.init(device="auto")
+info = rm_abstract.get_device_info()
+print(f"디바이스: {info['device_type']}:{info['device_id']}")
+```
+
+### Q: GPU 메모리가 부족해요
 
 ```bash
-# Verification
-python -m rm_abstract.verify              # Full verification
-python -m rm_abstract.cli info            # System info
-python -m rm_abstract.cli list-plugins    # List plugins
+# 다른 GPU 사용
+CUDA_VISIBLE_DEVICES=1 python script.py
 
-# Examples
-python -m rm_abstract.cli example simple      # Simple test
-python -m rm_abstract.cli example migration   # Migration demo
+# 또는 CPU 사용
+rm_abstract.init(device="cpu")
+```
 
-# Interactive
-python -m rm_abstract.cli init            # Interactive setup
+### Q: 기존 코드를 수정해야 하나요?
 
-# Testing
-python -m rm_abstract.cli test            # Run basic tests
+아니요! `rm_abstract.init()` 한 줄만 추가하면 됩니다:
+
+```python
+import rm_abstract
+rm_abstract.init()  # 이 한 줄만 추가
+
+# 기존 코드 그대로 사용
+from transformers import AutoModelForCausalLM
+model = AutoModelForCausalLM.from_pretrained("gpt2")
 ```
 
 ---
 
-## Next Steps
+## 🔗 다음 단계
 
-Now that you're up and running:
-
-1. **Read Full Documentation**
-   - [README.md](README.md) - Complete project overview
-   - [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md) - Plugin system details
-   - [INSTALL.md](INSTALL.md) - Detailed installation guide
-
-2. **Explore Examples**
-   - [simple_plugin_test.py](examples/simple_plugin_test.py)
-   - [gpu_to_npu_migration.py](examples/gpu_to_npu_migration.py)
-   - [plugin_system_demo.py](examples/plugin_system_demo.py)
-
-3. **Install Backend Support**
-   ```bash
-   pip install rm-abstract[gpu]           # GPU (vLLM)
-   pip install rm-abstract[npu-rbln]      # Rebellions NPU
-   pip install rm-abstract[npu-furiosa]   # FuriosaAI NPU
-   pip install rm-abstract[all]           # Everything
-   ```
-
-4. **Join Community**
-   - Report issues: https://github.com/yourusername/rm_abstract_layer/issues
-   - Contribute: See [CONTRIBUTING.md](CONTRIBUTING.md)
-   - Discuss: Join our Discord/Slack
-
----
-
-## Troubleshooting
-
-### "No module named 'rm_abstract'"
-
-```bash
-# Make sure you're in the right directory
-pip install -e .
-
-# Or add to PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
-```
-
-### "No plugins available"
-
-```bash
-# Check what's installed
-python -m rm_abstract.cli list-plugins --all
-
-# Install backend support
-pip install rm-abstract[gpu]  # or [npu-rbln], [npu-furiosa]
-```
-
-### Need more help?
-
-- Check [INSTALL.md](INSTALL.md#troubleshooting) for detailed troubleshooting
-- Run: `python -m rm_abstract.verify` for diagnostics
-- Enable debug logging:
-  ```python
-  import logging
-  logging.basicConfig(level=logging.DEBUG)
-  ```
-
----
-
-Happy orchestrating! 🚀
+- [INSTALL.md](INSTALL.md) - 상세 설치 가이드
+- [API.md](API.md) - REST API 레퍼런스
+- [ARCHITECTURE.md](ARCHITECTURE.md) - 시스템 아키텍처

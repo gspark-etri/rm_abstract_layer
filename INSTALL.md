@@ -1,430 +1,305 @@
-# Installation Guide
+# 설치 가이드
 
-Complete guide for installing LLM Heterogeneous Resource Orchestrator.
-
----
-
-## Table of Contents
-
-1. [Quick Install](#quick-install)
-2. [Installation Methods](#installation-methods)
-3. [Backend-Specific Installation](#backend-specific-installation)
-4. [Verification](#verification)
-5. [Troubleshooting](#troubleshooting)
+RM Abstract Layer 설치 및 환경 설정 가이드입니다.
 
 ---
 
-## Quick Install
+## 📋 요구사항
 
-### Automated Setup (Recommended)
+### 시스템 요구사항
 
-Using **uv** (fastest):
-```bash
-# Linux/Mac
-bash scripts/setup-uv.sh
+- **Python**: 3.9 이상
+- **OS**: Linux (Ubuntu 20.04+), macOS
+- **메모리**: 최소 8GB RAM (16GB 권장)
 
-# Windows PowerShell
-.\scripts\setup-uv.ps1
-```
+### 하드웨어별 요구사항
 
-Using **venv** (standard):
-```bash
-# Linux/Mac
-bash scripts/setup-venv.sh
-
-# Windows PowerShell
-.\scripts\setup-venv.ps1
-```
-
-### Manual Install
-
-#### For CPU-only (No GPU/NPU)
-
-```bash
-pip install rm-abstract
-```
-
-#### For GPU (NVIDIA CUDA)
-
-```bash
-# Install PyTorch with CUDA first
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-
-# Install rm-abstract with GPU support
-pip install rm-abstract[gpu]
-```
-
-#### For Development
-
-```bash
-git clone https://github.com/gspark-etri/rm_abstract_layer.git
-cd rm_abstract_layer
-
-# Using uv (recommended - 10-100x faster)
-uv venv
-source .venv/bin/activate  # Windows: .\.venv\Scripts\activate
-uv pip install -e ".[dev]"
-
-# Or using standard venv
-python -m venv venv
-source venv/bin/activate  # Windows: .\venv\Scripts\activate
-pip install -e ".[dev]"
-```
+| 하드웨어 | 요구사항 |
+|----------|----------|
+| GPU | NVIDIA GPU (CUDA 11.8+), 8GB+ VRAM |
+| NPU (RBLN) | Rebellions ATOM + RBLN SDK |
+| CPU | x86_64 또는 ARM64 |
 
 ---
 
-## Environment Setup Methods
+## 🚀 빠른 설치
 
-### Method Comparison
-
-| Method | Speed | Lock Files | Best For |
-|--------|-------|------------|----------|
-| **uv** | ⚡⚡⚡ (10-100x faster) | ✅ Built-in | All users (recommended) |
-| **venv + pip** | ⚡ Standard | ⚠️ Manual | Traditional workflow |
-| **pip only** | ⚡ Fast | ❌ None | Quick tests only |
-
-### Using uv (Recommended)
-
-[uv](https://github.com/astral-sh/uv) is an extremely fast Python package installer written in Rust.
-
-**Installation:**
+### 방법 1: pip 설치
 
 ```bash
-# Linux/Mac
+# 기본 설치
+pip install -e .
+
+# GPU 지원
+pip install -e ".[gpu]"
+
+# 전체 설치
+pip install -e ".[all]"
+```
+
+### 방법 2: uv 사용 (권장)
+
+```bash
+# uv 설치
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Windows PowerShell
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-**Setup:**
-
-```bash
-# Automated
-bash scripts/setup-uv.sh  # Linux/Mac
-.\scripts\setup-uv.ps1     # Windows
-
-# Manual
-uv venv
-source .venv/bin/activate  # Linux/Mac
-.\.venv\Scripts\activate   # Windows
-uv pip install -e ".[dev]"
-```
-
-**Benefits:**
-- ⚡ 10-100x faster than pip
-- 🔒 Built-in dependency resolution
-- 📦 Compatible with PyPI
-- 🎯 Reproducible builds with lock files
-
-See [ENVIRONMENT_SETUP.md](ENVIRONMENT_SETUP.md) for detailed guide.
-
----
-
-## Installation Methods
-
-### Method 1: PyPI (Recommended for Users)
-
-```bash
-# Basic installation
-pip install rm-abstract
-
-# With specific backend support
-pip install rm-abstract[gpu]           # GPU support
-pip install rm-abstract[npu-rbln]      # Rebellions NPU
-pip install rm-abstract[npu-furiosa]   # FuriosaAI NPU
-
-# Install everything
-pip install rm-abstract[all]
-```
-
-### Method 2: From Source (Recommended for Developers)
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/rm_abstract_layer.git
-cd rm_abstract_layer
-
-# Install in editable mode
-pip install -e .
-
-# Or with extras
-pip install -e ".[dev,gpu]"
-```
-
-### Method 3: Using setup.py directly
-
-```bash
-# Clone and navigate to repository
-git clone https://github.com/yourusername/rm_abstract_layer.git
-cd rm_abstract_layer
-
-# Install
-python setup.py install
-
-# Or develop mode
-python setup.py develop
+# 가상환경 생성 및 설치
+uv venv .venv
+source .venv/bin/activate
+uv pip install -e ".[all]"
 ```
 
 ---
 
-## Backend-Specific Installation
+## 📦 컴포넌트별 설치
 
-### GPU Backend (vLLM)
-
-#### Prerequisites
-- NVIDIA GPU with CUDA 11.8+ or 12.1+
-- NVIDIA Driver 525+ (for CUDA 12.1)
-
-#### Installation
+### 설치 상태 확인
 
 ```bash
-# 1. Install PyTorch with CUDA
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-
-# 2. Install vLLM
-pip install vllm>=0.2.0
-
-# 3. Install rm-abstract
-pip install rm-abstract[gpu]
+python -m rm_abstract.installer
 ```
 
-#### Verification
+출력 예시:
+```
+============================================================
+  RM Abstract Layer - Installation Guide
+============================================================
 
-```bash
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-python -c "import vllm; print(f'vLLM version: {vllm.__version__}')"
+Components:
+  ✓ Base: Core functionality
+  ✓ GPU (vLLM): High-performance GPU inference
+  ✓ Triton: Multi-model serving
+  ✓ TorchServe: PyTorch native serving
+
+System Dependencies:
+  ✗ Java 11: Required for TorchServe server
+  ✓ Docker: Required for Triton server
 ```
 
-### NPU Backend (Rebellions ATOM)
-
-#### Prerequisites
-- Rebellions ATOM NPU hardware
-- RBLN SDK installed
-
-#### Installation
+### Python 패키지 설치
 
 ```bash
-# 1. Install RBLN SDK (follow vendor instructions)
-# Usually something like:
-sudo apt-get install rbln-sdk
-
-# 2. Install rm-abstract with RBLN support
-pip install rm-abstract[npu-rbln]
+# 컴포넌트별 설치
+python -m rm_abstract.installer base        # 기본
+python -m rm_abstract.installer gpu         # GPU/vLLM
+python -m rm_abstract.installer triton      # Triton
+python -m rm_abstract.installer torchserve  # TorchServe
+python -m rm_abstract.installer all         # 전체
 ```
 
-#### Verification
+### 시스템 의존성 설치
 
 ```bash
-# Check RBLN SDK
-rbln-smi  # Should show NPU devices
-
-# Test rm-abstract
-python -c "import rm_abstract; print(rm_abstract.list_plugins())"
+# 스크립트 사용
+./scripts/install_deps.sh java              # Java (TorchServe용)
+./scripts/install_deps.sh docker            # Docker (Triton용)
+./scripts/install_deps.sh nvidia-docker     # NVIDIA Container Toolkit
 ```
 
-### NPU Backend (FuriosaAI RNGD)
+#### 수동 설치
 
-#### Prerequisites
-- FuriosaAI RNGD NPU hardware
-- Furiosa SDK installed
-
-#### Installation
-
+**Java 11 (TorchServe용)**
 ```bash
-# 1. Install Furiosa SDK (follow vendor instructions)
-sudo apt-get install furiosa-sdk
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y openjdk-11-jdk
 
-# 2. Install rm-abstract with Furiosa support
-pip install rm-abstract[npu-furiosa]
+# RHEL/CentOS
+sudo yum install -y java-11-openjdk
+
+# macOS
+brew install openjdk@11
 ```
 
-### CPU Backend (Fallback)
-
-CPU backend is included by default. No additional installation needed.
-
+**Docker (Triton용)**
 ```bash
-pip install rm-abstract
+# Ubuntu/Debian
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# NVIDIA Container Toolkit
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+sudo apt update && sudo apt install -y nvidia-container-toolkit
+sudo systemctl restart docker
 ```
 
 ---
 
-## Verification
+## 🔧 상세 설치
 
-### Quick Verification
-
-Run the built-in verification script:
+### GPU (vLLM) 설치
 
 ```bash
-python -m rm_abstract.verify
+# requirements 파일 사용
+pip install -r requirements/gpu.txt
+
+# 또는 직접 설치
+pip install vllm>=0.4.0 torch>=2.0.0
 ```
 
-Expected output:
-```
-========================================
-RM Abstract - Installation Verification
-========================================
+**확인:**
+```python
+import torch
+print(f"CUDA available: {torch.cuda.is_available()}")
+print(f"GPU count: {torch.cuda.device_count()}")
 
-[✓] PyTorch: 2.1.0
-[✓] Core modules: OK
-[✓] Available backends:
-    - cpu: Available
-    - gpu: Not available (vLLM not installed)
-    - rbln: Not available (SDK not found)
-    - furiosa: Not available (SDK not found)
-
-[✓] Plugin system: OK
-[✓] All tests passed!
+import vllm
+print(f"vLLM version: {vllm.__version__}")
 ```
 
-### Manual Verification
+### Triton 설치
+
+```bash
+# 클라이언트 설치
+pip install -r requirements/triton.txt
+
+# Docker 이미지 (서버)
+docker pull nvcr.io/nvidia/tritonserver:24.01-py3
+```
+
+**서버 시작:**
+```bash
+# Docker Compose 사용
+docker-compose -f docker/docker-compose.yml up triton
+
+# 또는 직접 실행
+docker run --gpus=1 --rm -p8000:8000 -p8001:8001 \
+  -v /path/to/models:/models \
+  nvcr.io/nvidia/tritonserver:24.01-py3 \
+  tritonserver --model-repository=/models
+```
+
+### TorchServe 설치
+
+```bash
+# 패키지 설치
+pip install -r requirements/torchserve.txt
+
+# Java 설치 필요
+sudo apt install openjdk-11-jdk
+```
+
+**서버 시작:**
+```bash
+torchserve --start \
+  --model-store ~/.rm_abstract/torchserve_models \
+  --models all
+```
+
+### Rebellions NPU 설치
+
+```bash
+# RBLN SDK 설치 (하드웨어 필요)
+pip install rebel-sdk
+
+# 선택 1: vLLM-RBLN (고성능)
+pip install vllm-rbln
+
+# 선택 2: Optimum-RBLN (HuggingFace 통합)
+pip install optimum-rbln
+```
+
+**참고:** https://docs.rbln.ai/latest/
+
+---
+
+## ✅ 설치 확인
+
+### 시스템 검증
+
+```bash
+# 전체 검증 (실제 추론 테스트 포함)
+python -m rm_abstract.system_validator
+
+# 빠른 검증 (추론 테스트 제외)
+python -m rm_abstract.system_validator --quick
+```
+
+### Python에서 확인
 
 ```python
 import rm_abstract
 
-# List available plugins
-plugins = rm_abstract.list_plugins(available_only=True)
-print("Available plugins:", list(plugins.keys()))
+# 시스템 정보 출력
+rm_abstract.print_system_info()
 
-# Initialize with auto-selection
-rm_abstract.init(device="auto", use_plugin_system=True)
-print("Initialization successful!")
+# 검증 실행
+rm_abstract.print_validation_report()
+
+# 사용 가능한 백엔드 확인
+backends = rm_abstract.get_available_backends()
+print(backends)
 ```
 
-### Run Example Tests
+### 테스트 실행
 
 ```bash
-# Run simple plugin test
-python examples/simple_plugin_test.py
-
-# Run GPU to NPU migration demo
-python examples/gpu_to_npu_migration.py
+# pytest 테스트
+pytest tests/test_core.py -v
+pytest tests/test_api.py -v
 ```
 
 ---
 
-## Troubleshooting
+## 🐛 문제 해결
 
-### Common Issues
+### GPU 메모리 부족
 
-#### 1. "No module named 'rm_abstract'"
-
-**Solution:**
 ```bash
-# Make sure you're in the right directory
-pip install -e .
+# 다른 GPU 사용
+CUDA_VISIBLE_DEVICES=1 python your_script.py
 
-# Or add to PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:/path/to/rm_abstract_layer/src"
+# 메모리 사용량 줄이기
+export VLLM_GPU_MEMORY_UTILIZATION=0.5
 ```
 
-#### 2. "CUDA not available"
+### vLLM 멀티프로세싱 오류
 
-**Solution:**
-```bash
-# Check CUDA installation
-nvidia-smi
-
-# Reinstall PyTorch with correct CUDA version
-pip uninstall torch
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-```
-
-#### 3. "vLLM import error"
-
-**Solution:**
-```bash
-# vLLM requires specific CUDA version
-pip install vllm --no-cache-dir
-
-# If still fails, try building from source
-pip install git+https://github.com/vllm-project/vllm.git
-```
-
-#### 4. "Plugin not found"
-
-**Solution:**
 ```python
-# Check if backend is properly installed
-import rm_abstract
-print(rm_abstract.list_plugins(available_only=False))
-
-# Install missing backend
-pip install rm-abstract[gpu]  # or [npu-rbln], [npu-furiosa]
+# 스크립트에 다음 추가
+if __name__ == "__main__":
+    # 코드를 여기에
+    pass
 ```
 
-#### 5. Windows-specific encoding issues
+### Triton 서버 연결 실패
 
-**Solution:**
 ```bash
-# Set UTF-8 encoding
-set PYTHONIOENCODING=utf-8
+# 서버 상태 확인
+curl http://localhost:8000/v2/health/ready
 
-# Or in PowerShell
-$env:PYTHONIOENCODING="utf-8"
+# 로그 확인
+docker logs rm_triton
 ```
 
-### Getting Help
-
-If you encounter issues:
-
-1. **Check documentation**: See [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)
-2. **Run verification**: `python -m rm_abstract.verify`
-3. **Enable verbose logging**:
-   ```python
-   import logging
-   logging.basicConfig(level=logging.DEBUG)
-   ```
-4. **Report issues**: https://github.com/yourusername/rm_abstract_layer/issues
-
----
-
-## Development Installation
-
-For contributing to the project:
+### TorchServe Java 오류
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/rm_abstract_layer.git
-cd rm_abstract_layer
+# Java 버전 확인
+java -version
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode with all extras
-pip install -e ".[dev,gpu]"
-
-# Run tests
-pytest tests/
-
-# Run linters
-black src/ tests/ examples/
-ruff check src/ tests/ examples/
-mypy src/
+# JAVA_HOME 설정
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 ```
 
 ---
 
-## Uninstallation
+## 📁 디렉토리 구조
 
-```bash
-# Uninstall rm-abstract
-pip uninstall rm-abstract
+설치 후 생성되는 디렉토리:
 
-# Clean up cache (optional)
-rm -rf ~/.rm_abstract/
+```
+~/.rm_abstract/
+├── cache/              # 컴파일 캐시
+├── torchserve_models/  # TorchServe 모델 저장소
+└── logs/               # 로그 파일
 ```
 
 ---
 
-## Next Steps
+## 🔗 관련 문서
 
-After installation:
-
-1. **Read the README**: [README.md](README.md)
-2. **Try examples**: Start with [examples/simple_plugin_test.py](examples/simple_plugin_test.py)
-3. **Explore architecture**: See [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)
-4. **Check migration guide**: [examples/gpu_to_npu_migration.py](examples/gpu_to_npu_migration.py)
-
-Happy orchestrating! 🚀
+- [QUICKSTART.md](QUICKSTART.md) - 빠른 시작 예제
+- [ARCHITECTURE.md](ARCHITECTURE.md) - 시스템 아키텍처
+- [API.md](API.md) - REST API 문서
