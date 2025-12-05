@@ -468,12 +468,16 @@ When new accelerator and dependent stack (compiler, runtime) are added:
 ✅ Binary adapters (BinaryCompilerAdapter, BinaryRuntimeAdapter)
 ✅ Auto-discovery and registration system
 ✅ Priority-based auto-selection
-✅ Backend implementations (GPU/CPU/NPU placeholders)
+✅ **GPU Backend** - vLLM high-performance inference
+✅ **CPU Backend** - PyTorch fallback
+✅ **NPU Backend** - Rebellions ATOM (vLLM-RBLN + Optimum-RBLN dual mode)
+✅ **Multi-Serving Engine Support** - vLLM, Triton, TorchServe
+✅ **System Information** - Hardware/software discovery
+✅ **Runtime Device Switching** - GPU ↔ CPU ↔ NPU
 
 ### In Progress
 
-🔄 Enhanced plugin interface (probe(), required_build_profiles())
-🔄 Build artifact management and caching
+🔄 FuriosaAI NPU backend
 🔄 Policy engine for resource selection
 🔄 PIM backend support
 
@@ -482,7 +486,7 @@ When new accelerator and dependent stack (compiler, runtime) are added:
 📋 Remote LLM backend support
 📋 Multi-resource orchestration (GPU + NPU + PIM)
 📋 Advanced build pipeline with optimization
-📋 Production-ready NPU/PIM backends
+📋 Ray Serve integration
 
 ---
 
@@ -491,7 +495,68 @@ When new accelerator and dependent stack (compiler, runtime) are added:
 ### Installation
 
 ```bash
+# Basic installation
 pip install rm-abstract
+
+# With GPU support
+pip install rm-abstract[gpu]
+
+# Development installation
+git clone https://github.com/gspark-etri/rm_abstract_layer.git
+cd rm_abstract_layer
+pip install -e ".[dev]"
+```
+
+### System Information
+
+Check available resources, backends, and serving engines:
+
+```bash
+# CLI
+python -m rm_abstract.system_info
+```
+
+```python
+# Python API
+import rm_abstract
+
+# Print formatted system info
+rm_abstract.print_system_info()
+
+# Get detailed info
+info = rm_abstract.get_system_info()
+print(f"GPUs: {len(info.gpus)}")
+print(f"NPUs: {len(info.npus)}")
+print(f"Available backends: {[b.name for b in info.backends if b.available]}")
+```
+
+Output example:
+```
+======================================================================
+  RM Abstract Layer - System Information
+======================================================================
+
+🎮 GPUs (8 detected)
+   ✓ [0] NVIDIA GeForce RTX 3090 - 24 GB
+
+🔮 NPUs (0 detected)
+   ✗ No NPUs detected
+
+⚙️  Backends
+   ✓ vLLM GPU Backend (0.12.0)
+   ✓ PyTorch CPU Backend
+   ✓ Rebellions ATOM NPU
+
+🚀 Serving Engines
+   ✓ vLLM
+   ✓ Triton Inference Server
+   ✓ TorchServe
+
+📊 Summary
+   Hardware: 8 GPU(s), 0 NPU(s)
+   Backends: 3/4 available
+   Serving Engines: 3/3 available
+======================================================================
 ```
 
 ### Basic Usage
@@ -500,20 +565,36 @@ pip install rm-abstract
 import rm_abstract
 
 # Initialize with auto-selection
-rm_abstract.init(device="auto", use_plugin_system=True)
+rm_abstract.init(device="auto", verbose=True)
 
-# Your existing code works as-is
-from transformers import AutoModelForCausalLM
+# Your existing HuggingFace code works as-is!
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
 model = AutoModelForCausalLM.from_pretrained("gpt2")
-# Model automatically runs on best available resource
+
+# Generate text - automatically uses best available backend
+inputs = tokenizer("The future of AI is", return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=30)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
-### List Available Resources
+### Device Switching
 
 ```python
-plugins = rm_abstract.list_plugins(available_only=True)
-for name, info in plugins.items():
-    print(f"{info['display_name']} - Priority: {info['priority']}")
+import rm_abstract
+
+# Start with GPU
+rm_abstract.init(device="gpu:0")
+
+# ... use GPU ...
+
+# Switch to CPU at runtime
+rm_abstract.switch_device("cpu")
+
+# Check current device
+info = rm_abstract.get_device_info()
+print(f"Current: {info['device_type']}:{info['device_id']}")
 ```
 
 ### GPU to NPU Migration Example
@@ -522,7 +603,109 @@ See [examples/gpu_to_npu_migration.py](examples/gpu_to_npu_migration.py) for det
 
 ---
 
-## 11. Summary
+## 11. Multi-Engine Model Serving
+
+Support for multiple serving frameworks with unified API:
+
+### Serving Engines Comparison
+
+| Feature         | vLLM           | Triton          | TorchServe   |
+|-----------------|----------------|-----------------|--------------|
+| Performance     | ⭐⭐⭐ (Best)   | ⭐⭐⭐           | ⭐⭐          |
+| Ease of Use     | ⭐⭐⭐          | ⭐⭐             | ⭐⭐⭐        |
+| Multi-model     | ⭐             | ⭐⭐⭐ (Best)    | ⭐⭐⭐        |
+| GPU Support     | ✓              | ✓               | ✓            |
+| RBLN NPU        | ✓              | ✓               | ✓            |
+| OpenAI API      | ✓ (Built-in)   | Custom          | Custom       |
+
+### Usage Examples
+
+```python
+from rm_abstract.serving import (
+    create_serving_engine, 
+    ServingConfig, 
+    ServingEngineType, 
+    DeviceTarget
+)
+
+# vLLM Engine (recommended for LLM)
+config = ServingConfig(
+    engine=ServingEngineType.VLLM,
+    device=DeviceTarget.GPU,
+    model_name="gpt2",
+)
+engine = create_serving_engine(config)
+engine.load_model("gpt2")
+output = engine.infer("Hello, I am", max_tokens=30)
+
+# Triton Engine (for multi-model serving)
+config = ServingConfig(
+    engine=ServingEngineType.TRITON,
+    device=DeviceTarget.GPU,
+)
+engine = create_serving_engine(config)
+engine.setup_model_repository("/path/to/models")
+engine.load_model("gpt2")
+
+# TorchServe Engine (PyTorch native)
+config = ServingConfig(
+    engine=ServingEngineType.TORCHSERVE,
+    device=DeviceTarget.GPU,
+)
+engine = create_serving_engine(config)
+engine.create_model_archive("gpt2")
+```
+
+See [examples/serving_engines_demo.py](examples/serving_engines_demo.py) for complete examples.
+
+---
+
+## 12. Rebellions ATOM NPU Support
+
+Dual mode support for Rebellions ATOM NPU:
+
+### vLLM-RBLN Mode (High Performance)
+
+```python
+# Requires: pip install vllm-rbln
+import rm_abstract
+rm_abstract.init(device="rbln:0")
+
+from transformers import AutoModelForCausalLM
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
+```
+
+### Optimum-RBLN Mode (HuggingFace Integration)
+
+```python
+# Requires: pip install optimum-rbln
+from optimum.rbln import RBLNModelForCausalLM
+
+model = RBLNModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    export=True,
+    rbln_device_id=0,
+)
+```
+
+### Mode Selection
+
+```python
+from rm_abstract.backends.npu.plugins.rebellions import RBLNBackend, RBLNMode
+
+# Auto mode (default) - automatically selects based on available SDK
+backend = RBLNBackend(device_id=0, mode="auto")
+
+# Force specific mode
+backend = RBLNBackend(device_id=0, mode="vllm")    # vLLM-RBLN
+backend = RBLNBackend(device_id=0, mode="optimum") # Optimum-RBLN
+```
+
+Reference: [RBLN SDK Documentation](https://docs.rbln.ai/latest/)
+
+---
+
+## 13. Summary
 
 This project:
 
@@ -530,8 +713,9 @@ This project:
 * Abstracts each resource's **pre-compilation/build/runtime stack** requirements
 * **Integrates closed-source binary-only NPU/PIM stacks** as black boxes through CLI/C API
 * Provides **migration path from existing GPU code** to NPU/PIM with minimal refactoring
-* Allows new accelerators and dependent Software Stacks to be **naturally integrated**
-  through **Backend Plugin + BuildProfile/Artifact + Binary adapters**
+* **Supports multiple serving engines** (vLLM, Triton, TorchServe) with unified API
+* **Rebellions ATOM NPU** dual mode support (vLLM-RBLN + Optimum-RBLN)
+* **System discovery** for hardware/software availability checking
 
 Ultimate goal:
 
@@ -554,3 +738,9 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 - [Architecture Overview](PLUGIN_ARCHITECTURE.md)
 - [Binary Adapter Guide](docs/binary_adapter_guide.md)
 - [Adding New Backends](docs/adding_backends.md)
+
+## Examples
+
+- [GPU/vLLM Usage](examples/gpu_vllm_usage.py) - GPU inference with device switching
+- [Serving Engines Demo](examples/serving_engines_demo.py) - vLLM, Triton, TorchServe comparison
+- [GPU to NPU Migration](examples/gpu_to_npu_migration.py) - Migration guide
