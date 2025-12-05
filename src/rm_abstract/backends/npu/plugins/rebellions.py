@@ -86,14 +86,37 @@ class RBLNBackend(Backend):
         return self._check_npu_device()
     
     def _check_vllm_rbln(self) -> bool:
-        """Check if vLLM-RBLN is available"""
+        """Check if vLLM-RBLN is available (not just regular vLLM)"""
         try:
-            import vllm
-            # Check if RBLN device is supported
-            # vLLM-RBLN uses "rbln" as device type
-            return hasattr(vllm, 'LLM')
+            # Check for vllm-rbln specific package
+            import vllm_rbln
+            return True
         except ImportError:
-            return False
+            pass
+        
+        # Check if RBLN SDK is installed (required for vLLM-RBLN)
+        try:
+            import rebel
+            # If rebel SDK exists, check if vLLM is also available
+            try:
+                import vllm
+                return True
+            except ImportError:
+                return False
+        except ImportError:
+            pass
+        
+        try:
+            import rbln
+            try:
+                import vllm
+                return True
+            except ImportError:
+                return False
+        except ImportError:
+            pass
+        
+        return False
     
     def _check_optimum_rbln(self) -> bool:
         """Check if Optimum-RBLN is available"""
@@ -125,8 +148,9 @@ class RBLNBackend(Backend):
         except Exception as e:
             logger.debug(f"NPU device check failed: {e}")
         
-        # If we can't check devices but SDK is available, assume device exists
-        return True
+        # If we can't check devices, NPU is not available
+        logger.debug("Cannot detect RBLN NPU devices - SDK not found or no devices")
+        return False
     
     def _determine_mode(self) -> RBLNMode:
         """Determine which mode to use based on availability and preference"""
@@ -286,17 +310,33 @@ class RBLNVLLMBackend(Backend):
         try:
             from vllm import LLM
             
-            # vLLM-RBLN specific configuration
-            self._llm_engine = LLM(
-                model=model_name,
-                device="rbln",  # Use RBLN NPU
-                tensor_parallel_size=config.get("tensor_parallel_size", 1),
-                dtype=config.get("dtype", "auto"),
-                trust_remote_code=config.get("trust_remote_code", True),
-                # RBLN specific options
-                max_num_seqs=config.get("max_num_seqs", 16),
-                max_model_len=config.get("max_model_len", None),
-            )
+            # Build vLLM-RBLN configuration
+            llm_kwargs = {
+                "model": model_name,
+                "tensor_parallel_size": config.get("tensor_parallel_size", 1),
+                "dtype": config.get("dtype", "auto"),
+                "trust_remote_code": config.get("trust_remote_code", True),
+                "max_num_seqs": config.get("max_num_seqs", 16),
+            }
+            
+            # Add max_model_len if specified
+            if config.get("max_model_len"):
+                llm_kwargs["max_model_len"] = config["max_model_len"]
+            
+            # Add RBLN device only if vLLM-RBLN is actually available
+            try:
+                import vllm_rbln
+                llm_kwargs["device"] = "rbln"
+                logger.debug("Using vLLM-RBLN with device='rbln'")
+            except ImportError:
+                # Check if vLLM supports RBLN device natively
+                try:
+                    from vllm.config import DeviceConfig
+                    llm_kwargs["device"] = "rbln"
+                except:
+                    logger.warning("vLLM-RBLN device parameter not supported, using default")
+            
+            self._llm_engine = LLM(**llm_kwargs)
             self._model_name = model_name
             
             logger.info(f"vLLM-RBLN engine created for model: {model_name}")
