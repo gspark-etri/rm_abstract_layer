@@ -209,19 +209,90 @@ rm_abstract.init(device="rbln:0")
 
 ## 📁 예제 파일 실행
 
+### 실행 전 준비
+
 ```bash
-# 가상환경 활성화 확인
+# 1. 프로젝트 디렉토리로 이동
+cd rm_abstract_layer
+
+# 2. 가상환경 활성화
 source .venv/bin/activate
 
-# 예제 실행
+# 3. 시스템 확인
+python -m rm_abstract.system_validator --quick
+```
+
+### 예제 목록
+
+| 파일 | 설명 | 난이도 |
+|------|------|--------|
+| `basic_usage.py` | 기본 사용법 | ⭐ |
+| `device_switching.py` | 디바이스 전환 | ⭐ |
+| `gpu_vllm_usage.py` | GPU/vLLM + 디바이스 스위칭 | ⭐⭐ |
+| `serving_engines_demo.py` | vLLM, Triton, TorchServe 비교 | ⭐⭐⭐ |
+| `plugin_system_demo.py` | 플러그인 시스템 데모 | ⭐⭐⭐ |
+
+### 단계별 실행
+
+**1️⃣ 기본 사용법 (초보자용)**
+```bash
+python examples/basic_usage.py
+```
+
+**2️⃣ GPU/vLLM 사용 (GPU 필요)**
+```bash
+# GPU 확인
+nvidia-smi
+
+# 실행
 python examples/gpu_vllm_usage.py
+```
+
+**3️⃣ 디바이스 전환 테스트**
+```bash
+python examples/device_switching.py
+```
+
+**4️⃣ 서빙 엔진 비교 (고급)**
+```bash
+# vLLM만 테스트
+python examples/serving_engines_demo.py --engine vllm
+
+# 전체 테스트
 python examples/serving_engines_demo.py
 ```
 
-| 파일 | 설명 |
-|------|------|
-| `gpu_vllm_usage.py` | GPU/vLLM 사용 및 디바이스 스위칭 |
-| `serving_engines_demo.py` | vLLM, Triton, TorchServe 비교 |
+### 실행 옵션
+
+```bash
+# 특정 GPU 사용
+CUDA_VISIBLE_DEVICES=1 python examples/gpu_vllm_usage.py
+
+# CPU만 사용
+python examples/basic_usage.py --device cpu
+
+# 상세 로그 출력
+python examples/gpu_vllm_usage.py --verbose
+```
+
+### 예상 출력 예시
+
+```
+$ python examples/gpu_vllm_usage.py
+
+[INFO] Initializing RM Abstract Layer...
+[INFO] Device: gpu:0 (NVIDIA GeForce RTX 3090)
+[INFO] Backend: VLLMBackend
+
+Prompt: "The future of AI is"
+Output: "The future of AI is bright. With advances in machine learning..."
+
+[INFO] Switching to CPU...
+[INFO] Device: cpu:0
+
+Prompt: "Hello, I am"
+Output: "Hello, I am a language model trained by..."
+```
 
 ---
 
